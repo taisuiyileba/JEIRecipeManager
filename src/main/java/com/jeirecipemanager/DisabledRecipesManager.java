@@ -3,7 +3,7 @@ package com.jeirecipemanager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import net.minecraft.client.Minecraft;
+import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,39 +11,26 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 public class DisabledRecipesManager {
     private static final Logger LOGGER = LoggerFactory.getLogger("JEIRecipeManager");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Type SET_TYPE = new TypeToken<Set<String>>(){}.getType();
 
-    private static final Set<String> disabledRecipes = new HashSet<>();
-    private static final Map<String, String> recipeCategoryMap = new HashMap<>();
+    private static final CopyOnWriteArraySet<String> disabledRecipes = new CopyOnWriteArraySet<>();
     private static Path configPath;
-    private static boolean initialized = false;
+    private static boolean serverInitialized = false;
 
-    private static void ensureInitialized() {
-        if (!initialized) {
-            try {
-                Path gameDir = Minecraft.getInstance().gameDirectory.toPath();
-                configPath = gameDir.resolve("config").resolve("disabled_recipes.json");
-                load();
-                initialized = true;
-            } catch (Exception e) {
-                LOGGER.error("Failed to initialize DisabledRecipesManager", e);
-            }
-        }
-    }
-
-    public static void init(Path configDir) {
-        if (!initialized) {
-            configPath = configDir.resolve("disabled_recipes.json");
+    public static void serverInit() {
+        if (!serverInitialized) {
+            configPath = FMLPaths.GAMEDIR.get().resolve("config").resolve("disabled_recipes.json");
             load();
-            initialized = true;
+            serverInitialized = true;
+            LOGGER.info("Server initialized DisabledRecipesManager with {} disabled recipes", disabledRecipes.size());
         }
     }
 
@@ -64,7 +51,6 @@ public class DisabledRecipesManager {
     }
 
     public static void save() {
-        ensureInitialized();
         if (configPath == null) {
             LOGGER.error("Cannot save disabled recipes: config path is null");
             return;
@@ -79,58 +65,36 @@ public class DisabledRecipesManager {
         }
     }
 
-    public static void reload() {
-        ensureInitialized();
-        load();
-        LOGGER.info("Reloaded config: {} disabled recipes", disabledRecipes.size());
+    public static void serverReload() {
+        if (serverInitialized) {
+            load();
+            LOGGER.info("Reloaded config: {} disabled recipes", disabledRecipes.size());
+        }
     }
 
     public static boolean isRecipeDisabled(String recipeId) {
-        ensureInitialized();
         return disabledRecipes.contains(recipeId);
     }
 
-    public static void disableRecipe(String recipeId, String categoryUid) {
-        ensureInitialized();
+    public static void serverDisableRecipe(String recipeId) {
         disabledRecipes.add(recipeId);
-        if (categoryUid != null) {
-            recipeCategoryMap.put(recipeId, categoryUid);
-        }
         save();
+        LOGGER.info("Disabled recipe: {}", recipeId);
     }
 
-    public static void enableRecipe(String recipeId) {
-        ensureInitialized();
+    public static void serverEnableRecipe(String recipeId) {
         disabledRecipes.remove(recipeId);
-        recipeCategoryMap.remove(recipeId);
         save();
+        LOGGER.info("Enabled recipe: {}", recipeId);
     }
 
     public static Set<String> getDisabledRecipes() {
-        ensureInitialized();
         return new HashSet<>(disabledRecipes);
     }
 
-    public static boolean isCategoryFullyDisabled(String categoryUid) {
-        ensureInitialized();
-        if (categoryUid == null || disabledRecipes.isEmpty()) {
-            return false;
-        }
-        for (Map.Entry<String, String> entry : recipeCategoryMap.entrySet()) {
-            if (categoryUid.equals(entry.getValue()) && disabledRecipes.contains(entry.getKey())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static void rebuildCategoryMap(Map<String, String> recipeToCategory) {
-        recipeCategoryMap.clear();
-        for (Map.Entry<String, String> entry : recipeToCategory.entrySet()) {
-            if (disabledRecipes.contains(entry.getKey())) {
-                recipeCategoryMap.put(entry.getKey(), entry.getValue());
-            }
-        }
-        LOGGER.info("Rebuilt category map with {} entries", recipeCategoryMap.size());
+    public static void clientUpdateDisabledRecipes(List<String> recipes) {
+        disabledRecipes.clear();
+        disabledRecipes.addAll(recipes);
+        LOGGER.info("Client received {} disabled recipes from server", disabledRecipes.size());
     }
 }

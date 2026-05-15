@@ -2,6 +2,7 @@ package com.jeirecipemanager.mixin;
 
 import com.google.gson.JsonElement;
 import com.jeirecipemanager.DisabledRecipesManager;
+import com.jeirecipemanager.network.NetworkHandler;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.profiling.ProfilerFiller;
@@ -26,7 +27,12 @@ public class RecipeManagerMixin {
         at = @At("HEAD")
     )
     private void jeirecipemanager_removeDisabledRecipes(Map<ResourceLocation, JsonElement> map, ResourceManager resourceManager, ProfilerFiller profiler, CallbackInfo ci) {
-        DisabledRecipesManager.reload();
+        DisabledRecipesManager.serverInit();
+        
+        // 在重新加载配置之前，先同步空列表到客户端
+//        trySyncEmptyToClients();
+        
+        DisabledRecipesManager.serverReload();
         Set<String> disabledRecipes = DisabledRecipesManager.getDisabledRecipes();
         if (disabledRecipes.isEmpty()) {
             return;
@@ -42,6 +48,31 @@ public class RecipeManagerMixin {
 
         if (removed > 0) {
             LOGGER.info("Removed {} disabled recipes from recipe manager", removed);
+        }
+        
+        // 重新加载完成后，同步最新的禁用列表到客户端
+        trySyncToClients();
+    }
+    
+    /**
+     * 尝试同步空列表到客户端，如果失败则忽略
+     */
+    private void trySyncEmptyToClients() {
+        try {
+            NetworkHandler.syncEmptyToAllPlayers();
+        } catch (Exception e) {
+            LOGGER.debug("Skipping empty sync (not in server environment): {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * 尝试同步最新禁用列表到客户端，如果失败则忽略
+     */
+    private void trySyncToClients() {
+        try {
+            NetworkHandler.syncToAllPlayers();
+        } catch (Exception e) {
+            LOGGER.debug("Skipping network sync (not in server environment): {}", e.getMessage());
         }
     }
 }

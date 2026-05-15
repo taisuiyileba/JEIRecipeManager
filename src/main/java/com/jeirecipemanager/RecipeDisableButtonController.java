@@ -1,5 +1,6 @@
 package com.jeirecipemanager;
 
+import com.jeirecipemanager.network.NetworkHandler;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.buttons.IButtonState;
@@ -18,8 +19,7 @@ public class RecipeDisableButtonController implements IIconButtonController {
     private final IDrawable offIcon;
     private final IDrawable onIcon;
     private final String recipeId;
-    private final String categoryUid;
-    private boolean toggledOn;
+    private boolean enabled;
 
     public RecipeDisableButtonController(IRecipeLayoutDrawable<?> recipeLayout) {
         this.offIcon = new DrawableResource(DISABLE_TEXTURE, 0, 0, 9, 9, 0, 0, 0, 0, 9, 9);
@@ -29,9 +29,8 @@ public class RecipeDisableButtonController implements IIconButtonController {
         Object recipe = recipeLayout.getRecipe();
         ResourceLocation registryName = ((IRecipeCategory) category).getRegistryName(recipe);
         this.recipeId = registryName != null ? registryName.toString() : "";
-        this.categoryUid = category.getRecipeType().getUid().toString();
 
-        this.toggledOn = this.recipeId.isEmpty() || !DisabledRecipesManager.isRecipeDisabled(this.recipeId);
+        this.enabled = this.recipeId.isEmpty() || !DisabledRecipesManager.isRecipeDisabled(this.recipeId);
     }
 
     public boolean hasValidRecipeId() {
@@ -40,7 +39,7 @@ public class RecipeDisableButtonController implements IIconButtonController {
 
     @Override
     public void updateState(IButtonState state) {
-        if (toggledOn) {
+        if (enabled) {
             state.setForcePressed(true);
             state.setIcon(onIcon);
         } else {
@@ -52,19 +51,15 @@ public class RecipeDisableButtonController implements IIconButtonController {
     @Override
     public boolean onPress(IJeiUserInput input) {
         if (!input.isSimulate() && !this.recipeId.isEmpty()) {
-            this.toggledOn = !this.toggledOn;
-            if (toggledOn) {
-                DisabledRecipesManager.enableRecipe(this.recipeId);
-            } else {
-                DisabledRecipesManager.disableRecipe(this.recipeId, this.categoryUid);
-            }
+            this.enabled = !this.enabled;
+            NetworkHandler.sendRecipeToggle(this.recipeId, !this.enabled);
         }
         return true;
     }
 
     @Override
     public void getTooltips(ITooltipBuilder tooltip) {
-        if (toggledOn) {
+        if (enabled) {
             tooltip.add(Component.translatable("jeirecipemanager.tooltip.recipe.enabled"));
         } else {
             tooltip.add(Component.translatable("jeirecipemanager.tooltip.recipe.disabled"));

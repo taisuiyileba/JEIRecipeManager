@@ -2,6 +2,6 @@
   "itemGroup.jeirecipemanager": "Example Mod Tab",
   "block.jeirecipemanager.example_block": "Example Block",
   "item.jeirecipemanager.example_item": "Example Item",
-  "jeirecipemanager.tooltip.recipe.enabled": "Recipe: ON",
-  "jeirecipemanager.tooltip.recipe.disabled": "Recipe: OFF"
+  "jeirecipemanager.tooltip.recipe.enabled": "Recipe: ON (Click to disable)",
+  "jeirecipemanager.tooltip.recipe.disabled": "Recipe: OFF (Click to enable)"
 }
