@@ -7,6 +7,10 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 @EventBusSubscriber(modid = Jeirecipemanager.MODID)
 public class NetworkHandler {
 
@@ -24,10 +28,23 @@ public class NetworkHandler {
 
     public static void syncToAllPlayers() {
         var disabledRecipes = DisabledRecipesManager.getDisabledRecipes();
-        PacketDistributor.sendToAllPlayers(new SyncDisabledRecipesPayload(disabledRecipes.stream().toList()));
+        Map<String, String> recipeJsonMap = DisabledRecipesManager.getServerRecipeJsonCache();
+        List<SyncDisabledRecipesPayload.DisabledRecipeEntry> entries = new ArrayList<>();
+        for (String recipeId : disabledRecipes) {
+            String json = recipeJsonMap.getOrDefault(recipeId, "");
+            entries.add(new SyncDisabledRecipesPayload.DisabledRecipeEntry(recipeId, json));
+        }
+        PacketDistributor.sendToAllPlayers(new SyncDisabledRecipesPayload(entries));
+    }
+
+    public static void syncToAllPlayers(Map<String, String> recipeJsonMap) {
+        for (var entry : recipeJsonMap.entrySet()) {
+            DisabledRecipesManager.serverCacheRecipeJson(entry.getKey(), entry.getValue());
+        }
+        syncToAllPlayers();
     }
 
     public static void syncEmptyToAllPlayers() {
-        PacketDistributor.sendToAllPlayers(new SyncDisabledRecipesPayload(java.util.List.of()));
+        PacketDistributor.sendToAllPlayers(new SyncDisabledRecipesPayload(List.of()));
     }
 }

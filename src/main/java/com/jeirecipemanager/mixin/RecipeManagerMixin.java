@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,14 +29,24 @@ public class RecipeManagerMixin {
     )
     private void jeirecipemanager_removeDisabledRecipes(Map<ResourceLocation, JsonElement> map, ResourceManager resourceManager, ProfilerFiller profiler, CallbackInfo ci) {
         DisabledRecipesManager.serverInit();
-        
-        // 在重新加载配置之前，先同步空列表到客户端
-//        trySyncEmptyToClients();
-        
         DisabledRecipesManager.serverReload();
         Set<String> disabledRecipes = DisabledRecipesManager.getDisabledRecipes();
         if (disabledRecipes.isEmpty()) {
+            trySyncEmptyToClients();
             return;
+        }
+
+        Map<String, String> recipeJsonMap = new HashMap<>();
+        for (String recipeId : disabledRecipes) {
+            ResourceLocation id = ResourceLocation.tryParse(recipeId);
+            if (id != null) {
+                JsonElement json = map.get(id);
+                if (json != null) {
+                    String jsonStr = json.toString();
+                    recipeJsonMap.put(recipeId, jsonStr);
+                    DisabledRecipesManager.serverCacheRecipeJson(recipeId, jsonStr);
+                }
+            }
         }
 
         int removed = 0;
@@ -49,14 +60,10 @@ public class RecipeManagerMixin {
         if (removed > 0) {
             LOGGER.info("Removed {} disabled recipes from recipe manager", removed);
         }
-        
-        // 重新加载完成后，同步最新的禁用列表到客户端
-        trySyncToClients();
+
+        trySyncToClients(recipeJsonMap);
     }
-    
-    /**
-     * 尝试同步空列表到客户端，如果失败则忽略
-     */
+
     private void trySyncEmptyToClients() {
         try {
             NetworkHandler.syncEmptyToAllPlayers();
@@ -64,13 +71,10 @@ public class RecipeManagerMixin {
             LOGGER.debug("Skipping empty sync (not in server environment): {}", e.getMessage());
         }
     }
-    
-    /**
-     * 尝试同步最新禁用列表到客户端，如果失败则忽略
-     */
-    private void trySyncToClients() {
+
+    private void trySyncToClients(Map<String, String> recipeJsonMap) {
         try {
-            NetworkHandler.syncToAllPlayers();
+            NetworkHandler.syncToAllPlayers(recipeJsonMap);
         } catch (Exception e) {
             LOGGER.debug("Skipping network sync (not in server environment): {}", e.getMessage());
         }

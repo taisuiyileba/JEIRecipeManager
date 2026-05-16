@@ -1,7 +1,9 @@
 package com.jeirecipemanager;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandSourceStack;
@@ -45,26 +47,14 @@ public class Jeirecipemanager
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MODID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
-    public static final DeferredBlock<Block> EXAMPLE_BLOCK = BLOCKS.registerSimpleBlock("example_block", BlockBehaviour.Properties.of().mapColor(MapColor.STONE));
-    public static final DeferredItem<BlockItem> EXAMPLE_BLOCK_ITEM = ITEMS.registerSimpleBlockItem("example_block", EXAMPLE_BLOCK);
-    public static final DeferredItem<Item> EXAMPLE_ITEM = ITEMS.registerSimpleItem("example_item", new Item.Properties().food(new FoodProperties.Builder()
-            .alwaysEdible().nutrition(1).saturationModifier(2f).build()));
-    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> EXAMPLE_TAB = CREATIVE_MODE_TABS.register("example_tab", () -> CreativeModeTab.builder()
-            .title(Component.translatable("itemGroup.jeirecipemanager"))
-            .withTabsBefore(CreativeModeTabs.COMBAT)
-            .icon(() -> EXAMPLE_ITEM.get().getDefaultInstance())
-            .displayItems((parameters, output) -> {
-                output.accept(EXAMPLE_ITEM.get());
-            }).build());
-
     public Jeirecipemanager(IEventBus modEventBus, ModContainer modContainer)
     {
         modEventBus.addListener(this::commonSetup);
-        BLOCKS.register(modEventBus);
-        ITEMS.register(modEventBus);
-        CREATIVE_MODE_TABS.register(modEventBus);
+        // BLOCKS.register(modEventBus);
+        // ITEMS.register(modEventBus);
+        // CREATIVE_MODE_TABS.register(modEventBus);
         NeoForge.EVENT_BUS.register(this);
-        modEventBus.addListener(this::addCreative);
+        // modEventBus.addListener(this::addCreative);
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
     }
 
@@ -75,8 +65,7 @@ public class Jeirecipemanager
 
     private void addCreative(BuildCreativeModeTabContentsEvent event)
     {
-        if (event.getTabKey() == CreativeModeTabs.BUILDING_BLOCKS)
-            event.accept(EXAMPLE_BLOCK_ITEM);
+        // 已移除示例物品注册
     }
 
     @SubscribeEvent
@@ -101,25 +90,19 @@ public class Jeirecipemanager
         public static void registerCommands(RegisterClientCommandsEvent event) {
             CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
             
-            // 注册 /jei toggleDisabled 命令
+            // 注册 /jrm showDisabled <true|false> 命令
             dispatcher.register(
-                LiteralArgumentBuilder.<CommandSourceStack>literal("jei")
-                    .then(LiteralArgumentBuilder.<CommandSourceStack>literal("toggleDisabled")
-                        .executes(context -> {
-                            JeiRecipeManagerPlugin.toggleShowDisabledRecipes();
-                            boolean showing = JeiRecipeManagerPlugin.isShowDisabledRecipes();
-                            String message = showing ? "已启用显示禁用配方" : "已隐藏禁用配方";
-                            context.getSource().sendSystemMessage(Component.literal(message));
-                            return 1;
-                        })
-                    )
+                LiteralArgumentBuilder.<CommandSourceStack>literal("jrm")
                     .then(LiteralArgumentBuilder.<CommandSourceStack>literal("showDisabled")
-                        .executes(context -> {
-                            boolean showing = JeiRecipeManagerPlugin.isShowDisabledRecipes();
-                            String message = showing ? "当前状态：显示禁用配方" : "当前状态：隐藏禁用配方";
-                            context.getSource().sendSystemMessage(Component.literal(message));
-                            return 1;
-                        })
+                        .then(RequiredArgumentBuilder.<CommandSourceStack, Boolean>argument("value", BoolArgumentType.bool())
+                            .executes(context -> {
+                                boolean value = BoolArgumentType.getBool(context, "value");
+                                JeiRecipeManagerPlugin.setShowDisabledRecipes(value);
+                                String message = value ? "已启用显示禁用配方" : "已隐藏禁用配方";
+                                context.getSource().sendSystemMessage(Component.literal(message));
+                                return 1;
+                            })
+                        )
                     )
             );
         }

@@ -3,6 +3,7 @@ package com.jeirecipemanager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,9 +12,14 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 public class DisabledRecipesManager {
@@ -24,6 +30,10 @@ public class DisabledRecipesManager {
     private static final CopyOnWriteArraySet<String> disabledRecipes = new CopyOnWriteArraySet<>();
     private static Path configPath;
     private static boolean serverInitialized = false;
+
+    private static final Map<String, String> serverRecipeJsonCache = new ConcurrentHashMap<>();
+    private static final Map<String, String> clientRecipeJsonCache = new ConcurrentHashMap<>();
+    private static final List<InjectedRecipe> clientInjectedRecipes = new CopyOnWriteArrayList<>();
 
     public static void serverInit() {
         if (!serverInitialized) {
@@ -92,9 +102,38 @@ public class DisabledRecipesManager {
         return new HashSet<>(disabledRecipes);
     }
 
-    public static void clientUpdateDisabledRecipes(List<String> recipes) {
+    public static void clientUpdateDisabledRecipes(List<String> recipes, Map<String, String> recipeJsonMap) {
         disabledRecipes.clear();
         disabledRecipes.addAll(recipes);
-        LOGGER.info("Client received {} disabled recipes from server", disabledRecipes.size());
+        clientRecipeJsonCache.clear();
+        clientRecipeJsonCache.putAll(recipeJsonMap);
+        LOGGER.info("Client received {} disabled recipes from server ({} with JSON data)",
+            disabledRecipes.size(), recipeJsonMap.size());
     }
+
+    public static Map<String, String> getClientRecipeJsonCache() {
+        return new HashMap<>(clientRecipeJsonCache);
+    }
+
+    public static void serverCacheRecipeJson(String recipeId, String recipeJson) {
+        serverRecipeJsonCache.put(recipeId, recipeJson);
+    }
+
+    public static Map<String, String> getServerRecipeJsonCache() {
+        return new HashMap<>(serverRecipeJsonCache);
+    }
+
+    public static void addClientInjectedRecipe(mezz.jei.api.recipe.RecipeType<?> jeiType, RecipeHolder<?> holder) {
+        clientInjectedRecipes.add(new InjectedRecipe(jeiType, holder));
+    }
+
+    public static List<InjectedRecipe> getClientInjectedRecipes() {
+        return new ArrayList<>(clientInjectedRecipes);
+    }
+
+    public static void clearClientInjectedRecipes() {
+        clientInjectedRecipes.clear();
+    }
+
+    public record InjectedRecipe(mezz.jei.api.recipe.RecipeType<?> jeiType, RecipeHolder<?> holder) {}
 }
