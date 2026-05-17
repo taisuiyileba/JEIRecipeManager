@@ -3,6 +3,7 @@ package com.jeirecipemanager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ public class DisabledRecipesManager {
 
     private static final Map<String, String> serverRecipeJsonCache = new ConcurrentHashMap<>();
     private static final Map<String, String> clientRecipeJsonCache = new ConcurrentHashMap<>();
+    private static final CopyOnWriteArraySet<ResourceLocation> clientDisabledRecipeOutputs = new CopyOnWriteArraySet<>();
     private static final List<InjectedRecipe> clientInjectedRecipes = new CopyOnWriteArrayList<>();
 
     public static void serverInit() {
@@ -113,6 +115,19 @@ public class DisabledRecipesManager {
 
     public static Map<String, String> getClientRecipeJsonCache() {
         return new HashMap<>(clientRecipeJsonCache);
+    }
+
+    public static void setClientDisabledRecipeOutputs(Set<ResourceLocation> outputs) {
+        clientDisabledRecipeOutputs.clear();
+        clientDisabledRecipeOutputs.addAll(outputs);
+    }
+
+    public static Set<ResourceLocation> getClientDisabledRecipeOutputs() {
+        return new HashSet<>(clientDisabledRecipeOutputs);
+    }
+
+    public static boolean isClientDisabledRecipeOutput(ResourceLocation output) {
+        return clientDisabledRecipeOutputs.contains(output);
     }
 
     public static void serverCacheRecipeJson(String recipeId, String recipeJson) {

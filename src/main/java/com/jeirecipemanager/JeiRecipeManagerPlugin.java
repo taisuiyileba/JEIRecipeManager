@@ -2,6 +2,7 @@ package com.jeirecipemanager;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.jeirecipemanager.mixin.IngredientFilterApiAccessor;
 import com.mojang.serialization.JsonOps;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
@@ -11,15 +12,19 @@ import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @JeiPlugin
@@ -47,6 +52,12 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         }
         removeInjectedDisabledRecipesFromJei();
         injectDisabledRecipesIntoJei();
+        if(showDisabledRecipes){
+            unhideAllRecipesInJei();
+        }else {
+            hideDisabledRecipesInJei();
+        }
+        rebuildIngredientFilter();
     }
 
     public static void setShowDisabledRecipes(boolean value) {
@@ -66,8 +77,10 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
 
         IRecipeManager recipeManager = jeiRuntime.getRecipeManager();
         Map<String, String> recipeJsonMap = DisabledRecipesManager.getClientRecipeJsonCache();
+        Set<ResourceLocation> disabledRecipeOutputs = new HashSet<>();
 
         if (recipeJsonMap.isEmpty()) {
+            DisabledRecipesManager.setClientDisabledRecipeOutputs(disabledRecipeOutputs);
             return;
         }
 
@@ -100,6 +113,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
             }
 
             RecipeHolder<?> holder = new RecipeHolder<>(id, recipe);
+            getRecipeResultItemId(recipe).ifPresent(disabledRecipeOutputs::add);
             RecipeType<?> jeiType = findJeiRecipeType(recipeManager, holder);
             if (jeiType == null) {
                 LOGGER.debug("No JEI category found for recipe: {}", recipeId);
@@ -108,6 +122,8 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
 
             recipesByType.computeIfAbsent(jeiType, k -> new ArrayList<>()).add(holder);
         }
+
+        DisabledRecipesManager.setClientDisabledRecipeOutputs(disabledRecipeOutputs);
 
         for (var entry : recipesByType.entrySet()) {
             RecipeType recipeType = entry.getKey();
@@ -154,6 +170,31 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         }
 
         DisabledRecipesManager.clearClientInjectedRecipes();
+    }
+
+    private static void rebuildIngredientFilter() {
+        try {
+            if (jeiRuntime.getIngredientFilter() instanceof IngredientFilterApiAccessor accessor) {
+                accessor.jeirecipemanager_getIngredientFilter().rebuildItemFilter();
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Failed to rebuild JEI ingredient filter", e);
+        }
+    }
+
+    private static Optional<ResourceLocation> getRecipeResultItemId(Recipe<?> recipe) {
+        try {
+            Level level = net.minecraft.client.Minecraft.getInstance().level;
+            ItemStack result = recipe.getResultItem(level != null ? level.registryAccess() : net.minecraft.core.RegistryAccess.EMPTY);
+            if (result.isEmpty()) {
+                return Optional.empty();
+            }
+            ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(result.getItem());
+            return itemId != null ? Optional.of(itemId) : Optional.empty();
+        } catch (Exception e) {
+            LOGGER.debug("Failed to get result item for disabled recipe", e);
+            return Optional.empty();
+        }
     }
 
     private static RecipeType<?> findJeiRecipeType(IRecipeManager recipeManager, RecipeHolder<?> holder) {
