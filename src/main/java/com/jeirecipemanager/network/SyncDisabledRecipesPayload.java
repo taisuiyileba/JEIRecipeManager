@@ -39,6 +39,8 @@ public record SyncDisabledRecipesPayload(List<DisabledRecipeEntry> recipes) impl
                 }
             }
             DisabledRecipesManager.clientUpdateDisabledRecipes(recipeIds, recipeJsonMap);
+            // 触发JEI更新配方可见性
+            JeiRecipeManagerPlugin.updateRecipeVisibility();
         });
     }
 

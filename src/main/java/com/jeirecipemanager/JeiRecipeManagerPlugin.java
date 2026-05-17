@@ -32,6 +32,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
     private static final Logger LOGGER = LoggerFactory.getLogger("JEIRecipeManager");
     private static IJeiRuntime jeiRuntime;
     private static boolean showDisabledRecipes = true;
+    private static AppliedVisibilityState appliedVisibilityState;
 
     @Override
     public ResourceLocation getPluginUid() {
@@ -50,6 +51,10 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         if (jeiRuntime == null) {
             return;
         }
+        AppliedVisibilityState currentState = AppliedVisibilityState.current(jeiRuntime, showDisabledRecipes);
+        if (currentState.equals(appliedVisibilityState)) {
+            return;
+        }
         removeInjectedDisabledRecipesFromJei();
         injectDisabledRecipesIntoJei();
         if(showDisabledRecipes){
@@ -58,6 +63,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
             hideDisabledRecipesInJei();
         }
         rebuildIngredientFilter();
+        appliedVisibilityState = currentState;
     }
 
     public static void setShowDisabledRecipes(boolean value) {
@@ -251,7 +257,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public static void unhideAllRecipesInJei() {
         if (jeiRuntime == null) {
             return;
@@ -273,6 +279,17 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
                     LOGGER.error("Failed to unhide recipes in category {}", recipeType.getUid(), e);
                 }
             }
+        }
+    }
+
+    private record AppliedVisibilityState(int runtimeIdentity, boolean showDisabledRecipes, Set<String> disabledRecipes, Map<String, String> recipeJsonCache) {
+        private static AppliedVisibilityState current(IJeiRuntime runtime, boolean showDisabledRecipes) {
+            return new AppliedVisibilityState(
+                System.identityHashCode(runtime),
+                showDisabledRecipes,
+                DisabledRecipesManager.getDisabledRecipes(),
+                DisabledRecipesManager.getClientRecipeJsonCache()
+            );
         }
     }
 }

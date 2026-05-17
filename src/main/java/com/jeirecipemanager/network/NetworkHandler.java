@@ -2,9 +2,12 @@ package com.jeirecipemanager.network;
 
 import com.jeirecipemanager.DisabledRecipesManager;
 import com.jeirecipemanager.Jeirecipemanager;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.registration.NetworkRegistry;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
 import java.util.ArrayList;
@@ -27,14 +30,10 @@ public class NetworkHandler {
     }
 
     public static void syncToAllPlayers() {
-        var disabledRecipes = DisabledRecipesManager.getDisabledRecipes();
-        Map<String, String> recipeJsonMap = DisabledRecipesManager.getServerRecipeJsonCache();
-        List<SyncDisabledRecipesPayload.DisabledRecipeEntry> entries = new ArrayList<>();
-        for (String recipeId : disabledRecipes) {
-            String json = recipeJsonMap.getOrDefault(recipeId, "");
-            entries.add(new SyncDisabledRecipesPayload.DisabledRecipeEntry(recipeId, json));
+        SyncDisabledRecipesPayload payload = createSyncPayload();
+        for (ServerPlayer player : net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayers()) {
+            sendToPlayerIfSupported(player, payload);
         }
-        PacketDistributor.sendToAllPlayers(new SyncDisabledRecipesPayload(entries));
     }
 
     public static void syncToAllPlayers(Map<String, String> recipeJsonMap) {
@@ -45,6 +44,37 @@ public class NetworkHandler {
     }
 
     public static void syncEmptyToAllPlayers() {
-        PacketDistributor.sendToAllPlayers(new SyncDisabledRecipesPayload(List.of()));
+        SyncDisabledRecipesPayload payload = new SyncDisabledRecipesPayload(List.of());
+        for (ServerPlayer player : net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayers()) {
+            sendToPlayerIfSupported(player, payload);
+        }
+    }
+
+    @SubscribeEvent
+    static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer serverPlayer) {
+            syncToPlayer(serverPlayer);
+        }
+    }
+
+    public static void syncToPlayer(ServerPlayer player) {
+        sendToPlayerIfSupported(player, createSyncPayload());
+    }
+
+    private static SyncDisabledRecipesPayload createSyncPayload() {
+        var disabledRecipes = DisabledRecipesManager.getDisabledRecipes();
+        Map<String, String> recipeJsonMap = DisabledRecipesManager.getServerRecipeJsonCache();
+        List<SyncDisabledRecipesPayload.DisabledRecipeEntry> entries = new ArrayList<>();
+        for (String recipeId : disabledRecipes) {
+            String json = recipeJsonMap.getOrDefault(recipeId, "");
+            entries.add(new SyncDisabledRecipesPayload.DisabledRecipeEntry(recipeId, json));
+        }
+        return new SyncDisabledRecipesPayload(entries);
+    }
+
+    private static void sendToPlayerIfSupported(ServerPlayer player, SyncDisabledRecipesPayload payload) {
+        if (NetworkRegistry.hasChannel(player.connection, SyncDisabledRecipesPayload.TYPE.id())) {
+            PacketDistributor.sendToPlayer(player, payload);
+        }
     }
 }
