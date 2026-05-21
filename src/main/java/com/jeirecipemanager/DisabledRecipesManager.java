@@ -33,6 +33,7 @@ public class DisabledRecipesManager {
     private static boolean serverInitialized = false;
 
     private static final Map<String, String> serverRecipeJsonCache = new ConcurrentHashMap<>();
+    private static final Map<String, String> serverAllRecipeJsonCache = new ConcurrentHashMap<>();
     private static final Map<String, String> clientRecipeJsonCache = new ConcurrentHashMap<>();
     private static final CopyOnWriteArraySet<ResourceLocation> clientDisabledRecipeOutputs = new CopyOnWriteArraySet<>();
     private static final List<InjectedRecipe> clientInjectedRecipes = new CopyOnWriteArrayList<>();
@@ -132,6 +133,19 @@ public class DisabledRecipesManager {
 
     public static void serverCacheRecipeJson(String recipeId, String recipeJson) {
         serverRecipeJsonCache.put(recipeId, recipeJson);
+    }
+
+    public static void serverCacheAllRecipeJson(Map<String, String> recipes) {
+        serverAllRecipeJsonCache.clear();
+        serverAllRecipeJsonCache.putAll(recipes);
+    }
+
+    public static String getServerRecipeJson(String recipeId) {
+        String disabledJson = serverRecipeJsonCache.get(recipeId);
+        if (disabledJson != null) {
+            return disabledJson;
+        }
+        return serverAllRecipeJsonCache.get(recipeId);
     }
 
     public static Map<String, String> getServerRecipeJsonCache() {

@@ -6,6 +6,7 @@ import com.jeirecipemanager.mixin.IngredientFilterApiAccessor;
 import com.mojang.serialization.JsonOps;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
+import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.recipe.category.IRecipeCategory;
@@ -44,6 +45,11 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         JeiRecipeManagerPlugin.jeiRuntime = jeiRuntime;
         RecipeManagerState.setRecipeManager(jeiRuntime.getRecipeManager());
         updateRecipeVisibility();
+    }
+
+    @Override
+    public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+        registration.addGhostIngredientHandler(mezz.jei.gui.recipes.RecipesGui.class, new RecipeGhostIngredientHandler());
     }
 
 

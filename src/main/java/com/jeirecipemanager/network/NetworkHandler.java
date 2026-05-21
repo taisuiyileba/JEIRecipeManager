@@ -22,11 +22,21 @@ public class NetworkHandler {
         var reg = event.registrar("1").optional();
 
         reg.playToServer(RecipeTogglePayload.TYPE, RecipeTogglePayload.STREAM_CODEC, RecipeTogglePayload::handle);
+        reg.playToServer(RecipeAddPayload.TYPE, RecipeAddPayload.STREAM_CODEC, RecipeAddPayload::handle);
+        reg.playToServer(RecipeDeletePayload.TYPE, RecipeDeletePayload.STREAM_CODEC, RecipeDeletePayload::handle);
         reg.playToClient(SyncDisabledRecipesPayload.TYPE, SyncDisabledRecipesPayload.STREAM_CODEC, SyncDisabledRecipesPayload::handle);
     }
 
     public static void sendRecipeToggle(String recipeId, boolean disable) {
         PacketDistributor.sendToServer(new RecipeTogglePayload(recipeId, disable));
+    }
+
+    public static void sendRecipeAdd(String templateRecipeId, List<com.jeirecipemanager.RecipeEditManager.SlotReplacement> replacements) {
+        PacketDistributor.sendToServer(new RecipeAddPayload(templateRecipeId, replacements));
+    }
+
+    public static void sendRecipeDelete(String recipeId) {
+        PacketDistributor.sendToServer(new RecipeDeletePayload(recipeId));
     }
 
     public static void syncToAllPlayers() {

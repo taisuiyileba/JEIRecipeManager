@@ -30,6 +30,12 @@ public class RecipeManagerMixin {
     private void jeirecipemanager_removeDisabledRecipes(Map<ResourceLocation, JsonElement> map, ResourceManager resourceManager, ProfilerFiller profiler, CallbackInfo ci) {
         DisabledRecipesManager.serverInit();
         DisabledRecipesManager.serverReload();
+        Map<String, String> allRecipeJsonMap = new HashMap<>();
+        for (var entry : map.entrySet()) {
+            allRecipeJsonMap.put(entry.getKey().toString(), entry.getValue().toString());
+        }
+        DisabledRecipesManager.serverCacheAllRecipeJson(allRecipeJsonMap);
+
         Set<String> disabledRecipes = DisabledRecipesManager.getDisabledRecipes();
         if (disabledRecipes.isEmpty()) {
             trySyncEmptyToClients();

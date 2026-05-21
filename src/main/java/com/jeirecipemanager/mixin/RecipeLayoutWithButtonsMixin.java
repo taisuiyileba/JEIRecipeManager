@@ -1,6 +1,7 @@
 package com.jeirecipemanager.mixin;
 
 import com.jeirecipemanager.RecipeDisableButtonController;
+import com.jeirecipemanager.RecipeAddButtonController;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.buttons.IIconButtonController;
 import mezz.jei.api.recipe.advanced.IRecipeButtonControllerFactory;
@@ -48,6 +49,10 @@ public class RecipeLayoutWithButtonsMixin {
         RecipeDisableButtonController controller = new RecipeDisableButtonController(recipeLayoutDrawable);
         if (controller.hasValidRecipeId()) {
             buttons.add(new IconButton(controller));
+        }
+        RecipeAddButtonController addController = new RecipeAddButtonController(recipeLayoutDrawable);
+        if (addController.hasValidRecipeId()) {
+            buttons.add(new IconButton(addController));
         }
     }
 }
