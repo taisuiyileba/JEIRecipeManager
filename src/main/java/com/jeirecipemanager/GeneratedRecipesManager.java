@@ -18,16 +18,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 public class GeneratedRecipesManager {
     private static final Logger LOGGER = LoggerFactory.getLogger("JEIRecipeManager");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String PACK_DIR = "jeirecipemanager_generated";
-    private static final String PACK_ID = "file/" + PACK_DIR;
     private static final String KEY_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~";
 
     public static Result addRecipeFromTemplate(String templateRecipeId, List<RecipeEditManager.SlotReplacement> replacements) {
@@ -61,11 +57,10 @@ public class GeneratedRecipesManager {
             Files.createDirectories(recipePath.getParent());
             Files.writeString(recipePath, GSON.toJson(recipeJson));
             ensurePackMcmeta();
-            reloadWithGeneratedPack();
             if (modifyingGeneratedRecipe) {
-                LOGGER.info("Modified generated recipe {}", targetId);
+                LOGGER.info("Modified generated recipe {}. Reload is required for changes to take effect.", targetId);
             } else {
-                LOGGER.info("Generated new recipe {} from template {}", targetId, templateRecipeId);
+                LOGGER.info("Generated new recipe {} from template {}. Reload is required for changes to take effect.", targetId, templateRecipeId);
             }
             return Result.success(modifyingGeneratedRecipe);
         } catch (IOException e) {
@@ -91,8 +86,7 @@ public class GeneratedRecipesManager {
             Path recipePath = getRecipePath(id);
             boolean deleted = Files.deleteIfExists(recipePath);
             if (deleted) {
-                reloadWithGeneratedPack();
-                LOGGER.info("Deleted generated recipe {}", recipeId);
+                LOGGER.info("Deleted generated recipe {}. Reload is required for changes to take effect.", recipeId);
             } else {
                 LOGGER.warn("Generated recipe file did not exist: {}", recipePath);
             }
@@ -272,6 +266,10 @@ public class GeneratedRecipesManager {
             }
             return true;
         }
+        if (gridIndex >= ingredients.size() && !replacement.clearsSlot()) {
+            ingredients.add(ingredientJson(replacement.itemId()));
+            return true;
+        }
         return false;
     }
 
@@ -376,19 +374,6 @@ public class GeneratedRecipesManager {
             root.add("pack", pack);
             Files.writeString(mcmeta, GSON.toJson(root));
         }
-    }
-
-    private static void reloadWithGeneratedPack() {
-        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null) {
-            return;
-        }
-        server.getPackRepository().reload();
-        Set<String> selected = new LinkedHashSet<>((Collection<String>) server.getPackRepository().getSelectedIds());
-        if (server.getPackRepository().isAvailable(PACK_ID)) {
-            selected.add(PACK_ID);
-        }
-        server.reloadResources(selected);
     }
 
     private static Path getDatapacksPath() {

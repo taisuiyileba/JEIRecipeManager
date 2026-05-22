@@ -2,6 +2,7 @@ package com.jeirecipemanager.network;
 
 import com.jeirecipemanager.DisabledRecipesManager;
 import com.jeirecipemanager.JeiRecipeManagerPlugin;
+import com.jeirecipemanager.RecipeEditManager;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -39,7 +40,7 @@ public record SyncDisabledRecipesPayload(List<DisabledRecipeEntry> recipes) impl
                 }
             }
             DisabledRecipesManager.clientUpdateDisabledRecipes(recipeIds, recipeJsonMap);
-            // 触发JEI更新配方可见性
+            RecipeEditManager.clearAll();
             JeiRecipeManagerPlugin.updateRecipeVisibility();
         });
     }

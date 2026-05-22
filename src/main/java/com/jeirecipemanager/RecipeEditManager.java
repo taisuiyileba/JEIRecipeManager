@@ -200,6 +200,11 @@ public class RecipeEditManager {
         }
     }
 
+    public static void clearAll() {
+        drafts.clear();
+        activeRecipeId = null;
+    }
+
     private static Optional<SlotAddress> findSlotAddress(List<IRecipeSlotView> slots, IRecipeSlotDrawable targetSlot) {
         GridSize inputGridSize = inferInputGridSize(slots);
         int inputIndex = 0;
