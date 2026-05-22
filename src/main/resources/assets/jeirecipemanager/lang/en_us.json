@@ -18,5 +18,9 @@
   "jeirecipemanager.tooltip.recipe_delete.generated": "Delete generated recipe",
   "jeirecipemanager.message.recipe_delete.no_permission": "Only operators can delete generated recipes",
   "jeirecipemanager.message.recipe_delete.success": "Generated recipe deleted. Reloading recipes...",
-  "jeirecipemanager.message.recipe_delete.failure": "Failed to delete generated recipe"
+  "jeirecipemanager.message.recipe_delete.failure": "Failed to delete generated recipe",
+  "jeirecipemanager.screen.ingredient_edit.title": "Edit input ingredient",
+  "jeirecipemanager.screen.ingredient_edit.input": "Item id or #tag",
+  "jeirecipemanager.screen.ingredient_edit.confirm": "OK",
+  "jeirecipemanager.screen.ingredient_edit.cancel": "Cancel"
 }

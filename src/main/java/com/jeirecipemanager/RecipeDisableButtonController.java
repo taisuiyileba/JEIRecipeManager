@@ -17,9 +17,11 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 public class RecipeDisableButtonController implements IIconButtonController {
     private static final ResourceLocation ENABLE_TEXTURE = ResourceLocation.fromNamespaceAndPath("jeirecipemanager", "textures/gui/recipe_enable.png");
     private static final ResourceLocation DISABLE_TEXTURE = ResourceLocation.fromNamespaceAndPath("jeirecipemanager", "textures/gui/recipe_disable.png");
+    private static final ResourceLocation DELETE_TEXTURE = ResourceLocation.fromNamespaceAndPath("jeirecipemanager", "textures/gui/recipe_delete.png");
 
     private final IDrawable offIcon;
     private final IDrawable onIcon;
+    private final IDrawable deleteIcon;
     private final String recipeId;
     private final boolean supportedRecipe;
     private final boolean generatedRecipe;
@@ -28,6 +30,7 @@ public class RecipeDisableButtonController implements IIconButtonController {
     public RecipeDisableButtonController(IRecipeLayoutDrawable<?> recipeLayout) {
         this.offIcon = new DrawableResource(DISABLE_TEXTURE, 0, 0, 9, 9, 0, 0, 0, 0, 9, 9);
         this.onIcon = new DrawableResource(ENABLE_TEXTURE, 0, 0, 9, 9, 0, 0, 0, 0, 9, 9);
+        this.deleteIcon = new DrawableResource(DELETE_TEXTURE, 0, 0, 16, 16, 0, 0, 0, 0, 16, 16);
 
         IRecipeCategory<?> category = recipeLayout.getRecipeCategory();
         Object recipe = recipeLayout.getRecipe();
@@ -47,7 +50,7 @@ public class RecipeDisableButtonController implements IIconButtonController {
     public void updateState(IButtonState state) {
         if (generatedRecipe) {
             state.setForcePressed(false);
-            state.setIcon(offIcon);
+            state.setIcon(deleteIcon);
             return;
         }
         if (enabled) {

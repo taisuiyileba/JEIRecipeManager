@@ -13,7 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.RecipeHolder;
 
 public class RecipeAddButtonController implements IIconButtonController {
-    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath("jeirecipemanager", "textures/gui/recipe_enable.png");
+    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath("jeirecipemanager", "textures/gui/recipe_edit.png");
 
     private final IDrawable icon;
     private final String recipeId;
@@ -21,7 +21,7 @@ public class RecipeAddButtonController implements IIconButtonController {
     private final boolean generatedRecipe;
 
     public RecipeAddButtonController(IRecipeLayoutDrawable<?> recipeLayout) {
-        this.icon = new DrawableResource(TEXTURE, 0, 0, 9, 9, 0, 0, 0, 0, 9, 9);
+        this.icon = new DrawableResource(TEXTURE, 0, 0, 16, 16, 0, 0, 0, 0, 16, 16);
         IRecipeCategory<?> category = recipeLayout.getRecipeCategory();
         Object recipe = recipeLayout.getRecipe();
         ResourceLocation registryName = ((IRecipeCategory) category).getRegistryName(recipe);

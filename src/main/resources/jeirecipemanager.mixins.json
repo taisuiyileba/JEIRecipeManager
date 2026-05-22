@@ -12,7 +12,8 @@
     "RecipeGuiLayoutsAccessor",
     "RecipeLayoutMixin",
     "RecipeLayoutWithButtonsMixin",
-    "RecipesGuiAccessor"
+    "RecipesGuiAccessor",
+    "RecipesGuiMouseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -48,12 +48,14 @@ public record RecipeAddPayload(String templateRecipeId, List<RecipeEditManager.S
         });
     }
 
-    private record SlotReplacementCodec(String role, int slotIndex, String itemId, int count) {
+    private record SlotReplacementCodec(String role, int slotIndex, String itemId, int count, int gridWidth, int gridHeight) {
         private static final StreamCodec<ByteBuf, RecipeEditManager.SlotReplacement> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.STRING_UTF8, RecipeEditManager.SlotReplacement::role,
             ByteBufCodecs.VAR_INT, RecipeEditManager.SlotReplacement::slotIndex,
             ByteBufCodecs.STRING_UTF8, RecipeEditManager.SlotReplacement::itemId,
             ByteBufCodecs.VAR_INT, RecipeEditManager.SlotReplacement::count,
+            ByteBufCodecs.VAR_INT, RecipeEditManager.SlotReplacement::gridWidth,
+            ByteBufCodecs.VAR_INT, RecipeEditManager.SlotReplacement::gridHeight,
             RecipeEditManager.SlotReplacement::new
         );
     }

@@ -28,6 +28,7 @@ public class GeneratedRecipesManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String PACK_DIR = "jeirecipemanager_generated";
     private static final String PACK_ID = "file/" + PACK_DIR;
+    private static final String KEY_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~";
 
     public static Result addRecipeFromTemplate(String templateRecipeId, List<RecipeEditManager.SlotReplacement> replacements) {
         String templateJson = DisabledRecipesManager.getServerRecipeJson(templateRecipeId);
@@ -104,6 +105,16 @@ public class GeneratedRecipesManager {
 
     private static boolean applyReplacements(JsonObject recipeJson, List<RecipeEditManager.SlotReplacement> replacements) {
         boolean changed = false;
+        String type = getType(recipeJson);
+        if (isShapedRecipe(recipeJson, type)) {
+            changed |= applyShapedInputs(recipeJson, replacements.stream()
+                .filter(replacement -> "INPUT".equals(replacement.role()))
+                .toList());
+            replacements = replacements.stream()
+                .filter(replacement -> !"INPUT".equals(replacement.role()))
+                .toList();
+        }
+
         for (RecipeEditManager.SlotReplacement replacement : replacements) {
             boolean output = "OUTPUT".equals(replacement.role());
             boolean input = "INPUT".equals(replacement.role());
@@ -122,20 +133,23 @@ public class GeneratedRecipesManager {
 
     private static boolean applyInput(JsonObject recipeJson, RecipeEditManager.SlotReplacement replacement) {
         String type = getType(recipeJson);
-        if (type.endsWith("crafting_shaped")) {
-            return applyShapedInput(recipeJson, replacement.slotIndex(), ingredientJson(replacement.itemId()));
-        }
-        if (type.endsWith("crafting_shapeless")) {
-            return applyShapelessInput(recipeJson, replacement.slotIndex(), ingredientJson(replacement.itemId()));
+        if (isShapelessRecipe(recipeJson, type)) {
+            return applyShapelessInput(recipeJson, replacement);
         }
         if (isCooking(type)) {
+            if (replacement.clearsSlot()) {
+                return recipeJson.remove("ingredient") != null;
+            }
             recipeJson.add("ingredient", ingredientJson(replacement.itemId()));
             return true;
         }
-        return applyGenericInput(recipeJson, replacement.slotIndex(), ingredientJson(replacement.itemId()));
+        return applyGenericInput(recipeJson, replacement);
     }
 
     private static boolean applyOutput(JsonObject recipeJson, RecipeEditManager.SlotReplacement replacement) {
+        if (replacement.clearsSlot()) {
+            return false;
+        }
         JsonObject itemStack = itemStackJson(replacement.itemId(), replacement.count());
         if (recipeJson.has("result")) {
             recipeJson.add("result", itemStack);
@@ -151,65 +165,135 @@ public class GeneratedRecipesManager {
         return false;
     }
 
-    private static boolean applyShapedInput(JsonObject recipeJson, int gridIndex, JsonObject ingredient) {
+    private static boolean applyShapedInputs(JsonObject recipeJson, List<RecipeEditManager.SlotReplacement> replacements) {
+        if (replacements.isEmpty()) {
+            return false;
+        }
         if (!recipeJson.has("pattern") || !recipeJson.has("key")) {
             return false;
         }
         JsonArray pattern = recipeJson.getAsJsonArray("pattern");
         int height = pattern.size();
         int width = height == 0 ? 0 : pattern.get(0).getAsString().length();
-        int ingredientIndex = -1;
+        GridSize gridSize = determineGridSize(width, height, replacements);
+        JsonObject originalKey = recipeJson.getAsJsonObject("key");
+        JsonElement[] grid = new JsonElement[gridSize.width() * gridSize.height()];
+        int rowOffset = Math.max(0, (gridSize.height() - height) / 2);
+        int colOffset = Math.max(0, (gridSize.width() - width) / 2);
         for (int i = 0; i < width * height; i++) {
-            if (getCraftingIndex(i, width, height) == gridIndex) {
-                ingredientIndex = i;
-                break;
+            int row = i / width;
+            int col = i % width;
+            String rowText = pattern.get(row).getAsString();
+            if (col >= rowText.length()) {
+                continue;
+            }
+            char keyChar = rowText.charAt(col);
+            if (keyChar == ' ') {
+                continue;
+            }
+            JsonElement ingredient = originalKey.get(String.valueOf(keyChar));
+            if (ingredient != null && !ingredient.isJsonNull()) {
+                int gridIndex = (row + rowOffset) * gridSize.width() + col + colOffset;
+                if (gridIndex >= 0 && gridIndex < grid.length) {
+                    grid[gridIndex] = ingredient.deepCopy();
+                }
             }
         }
-        if (ingredientIndex < 0) {
+
+        boolean changed = false;
+        for (RecipeEditManager.SlotReplacement replacement : replacements) {
+            int gridIndex = replacement.slotIndex();
+            if (gridIndex < 0 || gridIndex >= grid.length) {
+                continue;
+            }
+            grid[gridIndex] = replacement.clearsSlot() ? null : ingredientJson(replacement.itemId());
+            changed = true;
+        }
+        if (!changed) {
             return false;
         }
 
-        int row = ingredientIndex / width;
-        int col = ingredientIndex % width;
-        String rowText = pattern.get(row).getAsString();
-        if (col >= rowText.length()) {
+        int minRow = gridSize.height();
+        int minCol = gridSize.width();
+        int maxRow = -1;
+        int maxCol = -1;
+        for (int i = 0; i < grid.length; i++) {
+            if (grid[i] == null) {
+                continue;
+            }
+            int row = i / gridSize.width();
+            int col = i % gridSize.width();
+            minRow = Math.min(minRow, row);
+            minCol = Math.min(minCol, col);
+            maxRow = Math.max(maxRow, row);
+            maxCol = Math.max(maxCol, col);
+        }
+        if (maxRow < 0 || maxCol < 0) {
             return false;
         }
-        JsonObject key = recipeJson.getAsJsonObject("key");
-        char keyChar = nextKey(key);
-        StringBuilder builder = new StringBuilder(rowText);
-        builder.setCharAt(col, keyChar);
-        pattern.set(row, new com.google.gson.JsonPrimitive(builder.toString()));
-        key.add(String.valueOf(keyChar), ingredient);
-        removeUnusedKeys(recipeJson);
+
+        JsonArray newPattern = new JsonArray();
+        JsonObject newKey = new JsonObject();
+        int nextKeyIndex = 0;
+        for (int row = minRow; row <= maxRow; row++) {
+            StringBuilder rowPattern = new StringBuilder();
+            for (int col = minCol; col <= maxCol; col++) {
+                JsonElement ingredient = grid[row * gridSize.width() + col];
+                if (ingredient == null) {
+                    rowPattern.append(' ');
+                    continue;
+                }
+                if (nextKeyIndex >= KEY_CHARS.length()) {
+                    LOGGER.warn("Cannot encode shaped recipe with more than {} occupied inputs", KEY_CHARS.length());
+                    return false;
+                }
+                String keyName = String.valueOf(KEY_CHARS.charAt(nextKeyIndex++));
+                rowPattern.append(keyName);
+                newKey.add(keyName, ingredient);
+            }
+            newPattern.add(rowPattern.toString());
+        }
+        recipeJson.add("pattern", newPattern);
+        recipeJson.add("key", newKey);
         return true;
     }
 
-    private static boolean applyShapelessInput(JsonObject recipeJson, int gridIndex, JsonObject ingredient) {
+    private static boolean applyShapelessInput(JsonObject recipeJson, RecipeEditManager.SlotReplacement replacement) {
         if (!recipeJson.has("ingredients") || !recipeJson.get("ingredients").isJsonArray()) {
             return false;
         }
         JsonArray ingredients = recipeJson.getAsJsonArray("ingredients");
-        int size = getShapelessSize(ingredients.size());
-        for (int i = 0; i < ingredients.size(); i++) {
-            if (getCraftingIndex(i, size, size) == gridIndex) {
-                ingredients.set(i, ingredient);
-                return true;
+        int gridIndex = replacement.slotIndex();
+        if (gridIndex >= 0 && gridIndex < ingredients.size()) {
+            if (replacement.clearsSlot()) {
+                ingredients.remove(gridIndex);
+            } else {
+                ingredients.set(gridIndex, ingredientJson(replacement.itemId()));
             }
+            return true;
         }
         return false;
     }
 
-    private static boolean applyGenericInput(JsonObject recipeJson, int slotIndex, JsonObject ingredient) {
+    private static boolean applyGenericInput(JsonObject recipeJson, RecipeEditManager.SlotReplacement replacement) {
         if (recipeJson.has("ingredients") && recipeJson.get("ingredients").isJsonArray()) {
             JsonArray ingredients = recipeJson.getAsJsonArray("ingredients");
+            int slotIndex = replacement.slotIndex();
             if (slotIndex >= 0 && slotIndex < ingredients.size()) {
-                ingredients.set(slotIndex, ingredient);
+                if (replacement.clearsSlot()) {
+                    ingredients.remove(slotIndex);
+                } else {
+                    ingredients.set(slotIndex, ingredientJson(replacement.itemId()));
+                }
                 return true;
             }
         }
-        if (slotIndex == 0 && recipeJson.has("ingredient")) {
-            recipeJson.add("ingredient", ingredient);
+        if (replacement.slotIndex() == 0 && recipeJson.has("ingredient")) {
+            if (replacement.clearsSlot()) {
+                recipeJson.remove("ingredient");
+            } else {
+                recipeJson.add("ingredient", ingredientJson(replacement.itemId()));
+            }
             return true;
         }
         return false;
@@ -217,7 +301,11 @@ public class GeneratedRecipesManager {
 
     private static JsonObject ingredientJson(String itemId) {
         JsonObject object = new JsonObject();
-        object.addProperty("item", itemId);
+        if (itemId.startsWith("#")) {
+            object.addProperty("tag", itemId.substring(1));
+        } else {
+            object.addProperty("item", itemId);
+        }
         return object;
     }
 
@@ -242,73 +330,28 @@ public class GeneratedRecipesManager {
             type.endsWith("campfire_cooking");
     }
 
-    private static char nextKey(JsonObject key) {
-        for (char c = 'A'; c <= 'Z'; c++) {
-            if (!key.has(String.valueOf(c))) {
-                return c;
-            }
-        }
-        for (char c = 'a'; c <= 'z'; c++) {
-            if (!key.has(String.valueOf(c))) {
-                return c;
-            }
-        }
-        return '#';
+    private static boolean isShapedRecipe(JsonObject recipeJson, String type) {
+        return (type.endsWith("crafting_shaped") || recipeJson.has("pattern")) &&
+            recipeJson.has("pattern") &&
+            recipeJson.has("key");
     }
 
-    private static void removeUnusedKeys(JsonObject recipeJson) {
-        if (!recipeJson.has("pattern") || !recipeJson.has("key")) {
-            return;
-        }
-        Set<String> usedKeys = new LinkedHashSet<>();
-        for (JsonElement rowElement : recipeJson.getAsJsonArray("pattern")) {
-            String row = rowElement.getAsString();
-            for (int i = 0; i < row.length(); i++) {
-                char c = row.charAt(i);
-                if (c != ' ') {
-                    usedKeys.add(String.valueOf(c));
-                }
-            }
-        }
-        JsonObject key = recipeJson.getAsJsonObject("key");
-        List<String> definedKeys = new java.util.ArrayList<>(key.keySet());
-        for (String definedKey : definedKeys) {
-            if (!usedKeys.contains(definedKey)) {
-                key.remove(definedKey);
-            }
-        }
+    private static boolean isShapelessRecipe(JsonObject recipeJson, String type) {
+        return (type.endsWith("crafting_shapeless") || type.contains("shapeless")) &&
+            recipeJson.has("ingredients") &&
+            recipeJson.get("ingredients").isJsonArray();
     }
 
-    private static int getShapelessSize(int total) {
-        if (total > 4) {
-            return 3;
-        } else if (total > 1) {
-            return 2;
-        }
-        return 1;
-    }
-
-    private static int getCraftingIndex(int i, int width, int height) {
-        if (width == 1) {
-            if (height == 3 || height == 2) {
-                return (i * 3) + 1;
+    private static GridSize determineGridSize(int patternWidth, int patternHeight, List<RecipeEditManager.SlotReplacement> replacements) {
+        int width = Math.max(3, patternWidth);
+        int height = Math.max(3, patternHeight);
+        for (RecipeEditManager.SlotReplacement replacement : replacements) {
+            if (replacement.gridWidth() > 0 && replacement.gridHeight() > 0) {
+                width = Math.max(width, replacement.gridWidth());
+                height = Math.max(height, replacement.gridHeight());
             }
-            return 4;
-        } else if (height == 1) {
-            return i + 3;
-        } else if (width == 2) {
-            int index = i;
-            if (i > 1) {
-                index++;
-                if (i > 3) {
-                    index++;
-                }
-            }
-            return index;
-        } else if (height == 2) {
-            return i + 3;
         }
-        return i;
+        return new GridSize(width, height);
     }
 
     private static Path getRecipePath(ResourceLocation recipeId) {
@@ -392,4 +435,6 @@ public class GeneratedRecipesManager {
             return new Result(false, false);
         }
     }
+
+    private record GridSize(int width, int height) {}
 }
