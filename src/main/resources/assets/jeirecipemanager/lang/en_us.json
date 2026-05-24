@@ -5,6 +5,8 @@
   "jeirecipemanager.tooltip.recipe.enabled": "Recipe: ON (Click to disable)",
   "jeirecipemanager.tooltip.recipe.disabled": "Recipe: OFF (Click to enable)",
   "jeirecipemanager.message.recipe_toggle.no_permission": "Only operators can enable or disable recipes",
+  "jeirecipemanager.message.recipe_toggle.disabled": "Recipe disabled. Run /reload for changes to take effect.",
+  "jeirecipemanager.message.recipe_toggle.enabled": "Recipe enabled. Run /reload for changes to take effect.",
   "jeirecipemanager.tooltip.recipe_add.start": "Add recipe: click to edit, then drag JEI items onto recipe slots",
   "jeirecipemanager.tooltip.recipe_add.editing": "Editing recipe: drag JEI items onto input or output slots",
   "jeirecipemanager.tooltip.recipe_add.submit": "Create recipe from these replacements",

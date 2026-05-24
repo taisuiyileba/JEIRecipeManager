@@ -37,8 +37,8 @@ public class ElementPrefixParserMixin {
 
     @Inject(method = "<init>", at = @At("TAIL"), remap = false)
     private void jeirecipemanager_addDisabledRecipeOutputPrefix(IIngredientManager ingredientManager, IIngredientFilterConfig config, IColorHelper colorHelper, IModIdHelper modIdHelper, CallbackInfo ci) {
-        this.map.put('!', new PrefixInfo<>(
-            '!',
+        this.map.put('-', new PrefixInfo<>(
+            '-',
             () -> SearchMode.REQUIRE_PREFIX,
             info -> {
                 ResourceLocation resourceLocation = info.getResourceLocation();
@@ -65,8 +65,8 @@ public class ElementPrefixParserMixin {
 
     @Inject(method = "parseToken", at = @At("HEAD"), cancellable = true, remap = false)
     private void jeirecipemanager_parseDisabledRecipeOutputPrefix(String token, CallbackInfoReturnable<Optional<ElementPrefixParser.TokenInfo>> cir) {
-        if (token.equals("!")) {
-            PrefixInfo<IListElementInfo<?>, IListElement<?>> prefixInfo = this.map.get('!');
+        if (token.equals("-")) {
+            PrefixInfo<IListElementInfo<?>, IListElement<?>> prefixInfo = this.map.get('-');
             if (prefixInfo != null && prefixInfo.getMode() != SearchMode.DISABLED) {
                 cir.setReturnValue(Optional.of(new ElementPrefixParser.TokenInfo(DISABLED_RECIPE_OUTPUT_SEARCH_TOKEN, prefixInfo)));
             }

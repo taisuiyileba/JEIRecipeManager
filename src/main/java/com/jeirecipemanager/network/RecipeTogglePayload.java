@@ -37,8 +37,10 @@ public record RecipeTogglePayload(String recipeId, boolean disable) implements C
         ctx.enqueueWork(() -> {
             if (disable) {
                 DisabledRecipesManager.serverDisableRecipe(recipeId);
+                serverPlayer.sendSystemMessage(Component.translatable("jeirecipemanager.message.recipe_toggle.disabled"));
             } else {
                 DisabledRecipesManager.serverEnableRecipe(recipeId);
+                serverPlayer.sendSystemMessage(Component.translatable("jeirecipemanager.message.recipe_toggle.enabled"));
             }
             NetworkHandler.syncToAllPlayers();
         });
