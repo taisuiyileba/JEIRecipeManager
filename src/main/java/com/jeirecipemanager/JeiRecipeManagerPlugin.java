@@ -45,6 +45,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         JeiRecipeManagerPlugin.jeiRuntime = jeiRuntime;
         RecipeManagerState.setRecipeManager(jeiRuntime.getRecipeManager());
         updateRecipeVisibility();
+        collectGeneratedRecipeOutputs();
     }
 
     @Override
@@ -68,6 +69,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         }else {
             hideDisabledRecipesInJei();
         }
+        collectGeneratedRecipeOutputs();
         rebuildIngredientFilter();
         appliedVisibilityState = currentState;
     }
@@ -192,6 +194,32 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         } catch (Exception e) {
             LOGGER.debug("Failed to rebuild JEI ingredient filter", e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void collectGeneratedRecipeOutputs() {
+        if (jeiRuntime == null) {
+            return;
+        }
+
+        IRecipeManager recipeManager = jeiRuntime.getRecipeManager();
+        Set<ResourceLocation> generatedRecipeOutputs = new HashSet<>();
+
+        List<IRecipeCategory<?>> categories = recipeManager.createRecipeCategoryLookup().get().toList();
+        for (IRecipeCategory<?> category : categories) {
+            RecipeType<?> recipeType = category.getRecipeType();
+            recipeManager.createRecipeLookup((RecipeType) recipeType).includeHidden().get().forEach(recipe -> {
+                ResourceLocation registryName = ((IRecipeCategory) category).getRegistryName(recipe);
+                if (registryName != null && GeneratedRecipesManager.isGeneratedRecipeId(registryName.toString())) {
+                    if (recipe instanceof RecipeHolder<?> holder) {
+                        getRecipeResultItemId(holder.value()).ifPresent(generatedRecipeOutputs::add);
+                    }
+                }
+            });
+        }
+
+        DisabledRecipesManager.setClientGeneratedRecipeOutputs(generatedRecipeOutputs);
+        LOGGER.info("Collected {} generated recipe outputs for + search", generatedRecipeOutputs.size());
     }
 
     private static Optional<ResourceLocation> getRecipeResultItemId(Recipe<?> recipe) {

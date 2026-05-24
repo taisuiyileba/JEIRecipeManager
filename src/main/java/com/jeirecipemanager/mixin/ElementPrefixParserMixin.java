@@ -28,6 +28,7 @@ import java.util.Optional;
 @Mixin(ElementPrefixParser.class)
 public class ElementPrefixParserMixin {
     private static final String DISABLED_RECIPE_OUTPUT_SEARCH_TOKEN = "jeirecipemanager_disabled_recipe_output";
+    private static final String GENERATED_RECIPE_OUTPUT_SEARCH_TOKEN = "jeirecipemanager_generated_recipe_output";
 
     @Shadow
     @Final
@@ -48,6 +49,18 @@ public class ElementPrefixParserMixin {
             },
             LimitedStringStorage::new
         ));
+        this.map.put('+', new PrefixInfo<>(
+            '+',
+            () -> SearchMode.REQUIRE_PREFIX,
+            info -> {
+                ResourceLocation resourceLocation = info.getResourceLocation();
+                if (DisabledRecipesManager.isClientGeneratedRecipeOutput(resourceLocation)) {
+                    return List.of(GENERATED_RECIPE_OUTPUT_SEARCH_TOKEN);
+                }
+                return List.of();
+            },
+            LimitedStringStorage::new
+        ));
     }
 
     @Inject(method = "parseToken", at = @At("HEAD"), cancellable = true, remap = false)
@@ -56,6 +69,12 @@ public class ElementPrefixParserMixin {
             PrefixInfo<IListElementInfo<?>, IListElement<?>> prefixInfo = this.map.get('!');
             if (prefixInfo != null && prefixInfo.getMode() != SearchMode.DISABLED) {
                 cir.setReturnValue(Optional.of(new ElementPrefixParser.TokenInfo(DISABLED_RECIPE_OUTPUT_SEARCH_TOKEN, prefixInfo)));
+            }
+        }
+        if (token.equals("+")) {
+            PrefixInfo<IListElementInfo<?>, IListElement<?>> prefixInfo = this.map.get('+');
+            if (prefixInfo != null && prefixInfo.getMode() != SearchMode.DISABLED) {
+                cir.setReturnValue(Optional.of(new ElementPrefixParser.TokenInfo(GENERATED_RECIPE_OUTPUT_SEARCH_TOKEN, prefixInfo)));
             }
         }
     }

@@ -36,6 +36,7 @@ public class DisabledRecipesManager {
     private static final Map<String, String> serverAllRecipeJsonCache = new ConcurrentHashMap<>();
     private static final Map<String, String> clientRecipeJsonCache = new ConcurrentHashMap<>();
     private static final CopyOnWriteArraySet<ResourceLocation> clientDisabledRecipeOutputs = new CopyOnWriteArraySet<>();
+    private static final CopyOnWriteArraySet<ResourceLocation> clientGeneratedRecipeOutputs = new CopyOnWriteArraySet<>();
     private static final List<InjectedRecipe> clientInjectedRecipes = new CopyOnWriteArrayList<>();
 
     public static void serverInit() {
@@ -129,6 +130,19 @@ public class DisabledRecipesManager {
 
     public static boolean isClientDisabledRecipeOutput(ResourceLocation output) {
         return clientDisabledRecipeOutputs.contains(output);
+    }
+
+    public static void setClientGeneratedRecipeOutputs(Set<ResourceLocation> outputs) {
+        clientGeneratedRecipeOutputs.clear();
+        clientGeneratedRecipeOutputs.addAll(outputs);
+    }
+
+    public static Set<ResourceLocation> getClientGeneratedRecipeOutputs() {
+        return new HashSet<>(clientGeneratedRecipeOutputs);
+    }
+
+    public static boolean isClientGeneratedRecipeOutput(ResourceLocation output) {
+        return clientGeneratedRecipeOutputs.contains(output);
     }
 
     public static void serverCacheRecipeJson(String recipeId, String recipeJson) {
