@@ -6,12 +6,14 @@ import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.handlers.IGhostIngredientHandler;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.gui.inputs.RecipeSlotUnderMouse;
+import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.gui.recipes.IRecipeLayoutWithButtons;
 import mezz.jei.gui.recipes.RecipeGuiLayouts;
 import mezz.jei.gui.recipes.RecipesGui;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -22,7 +24,13 @@ public class RecipeGhostIngredientHandler implements IGhostIngredientHandler<Rec
     @Override
     public <I> List<Target<I>> getTargetsTyped(RecipesGui gui, mezz.jei.api.ingredients.ITypedIngredient<I> ingredient, boolean doStart) {
         Optional<ItemStack> itemStack = ingredient.getIngredient(mezz.jei.api.constants.VanillaTypes.ITEM_STACK);
-        if (itemStack.isEmpty() || itemStack.get().isEmpty()) {
+        Optional<FluidStack> fluidStack = ingredient.getIngredient(NeoForgeTypes.FLUID_STACK);
+        RecipeEditManager.IngredientKind draggedKind;
+        if (itemStack.isPresent() && !itemStack.get().isEmpty()) {
+            draggedKind = RecipeEditManager.IngredientKind.ITEM;
+        } else if (fluidStack.isPresent() && !fluidStack.get().isEmpty()) {
+            draggedKind = RecipeEditManager.IngredientKind.FLUID;
+        } else {
             return List.of();
         }
 
@@ -44,6 +52,10 @@ public class RecipeGhostIngredientHandler implements IGhostIngredientHandler<Rec
                 }
                 if (slot.getRole() != mezz.jei.api.recipe.RecipeIngredientRole.INPUT &&
                     slot.getRole() != mezz.jei.api.recipe.RecipeIngredientRole.OUTPUT) {
+                    continue;
+                }
+                RecipeEditManager.IngredientKind slotKind = RecipeEditManager.getSlotIngredientKind(recipeId, layout.getRecipe(), slots, slot);
+                if (slotKind != draggedKind) {
                     continue;
                 }
 
@@ -93,6 +105,8 @@ public class RecipeGhostIngredientHandler implements IGhostIngredientHandler<Rec
         @Override
         public void accept(I ingredient) {
             if (ingredient instanceof ItemStack stack) {
+                RecipeEditManager.replaceSlot(recipeId, slots, slot, stack);
+            } else if (ingredient instanceof FluidStack stack) {
                 RecipeEditManager.replaceSlot(recipeId, slots, slot, stack);
             }
         }

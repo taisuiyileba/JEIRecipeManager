@@ -1,8 +1,10 @@
 package com.jeirecipemanager.network;
 
 import com.jeirecipemanager.DisabledRecipesManager;
+import com.jeirecipemanager.GeneratedRecipesManager;
 import com.jeirecipemanager.Jeirecipemanager;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -25,6 +27,7 @@ public class NetworkHandler {
         reg.playToServer(RecipeAddPayload.TYPE, RecipeAddPayload.STREAM_CODEC, RecipeAddPayload::handle);
         reg.playToServer(RecipeDeletePayload.TYPE, RecipeDeletePayload.STREAM_CODEC, RecipeDeletePayload::handle);
         reg.playToClient(SyncDisabledRecipesPayload.TYPE, SyncDisabledRecipesPayload.STREAM_CODEC, SyncDisabledRecipesPayload::handle);
+        reg.playToClient(SyncPendingRecipeDeletesPayload.TYPE, SyncPendingRecipeDeletesPayload.STREAM_CODEC, SyncPendingRecipeDeletesPayload::handle);
     }
 
     public static void sendRecipeToggle(String recipeId, boolean disable) {
@@ -35,14 +38,16 @@ public class NetworkHandler {
         PacketDistributor.sendToServer(new RecipeAddPayload(templateRecipeId, replacements));
     }
 
-    public static void sendRecipeDelete(String recipeId) {
-        PacketDistributor.sendToServer(new RecipeDeletePayload(recipeId));
+    public static void sendRecipeDelete(String recipeId, boolean delete) {
+        PacketDistributor.sendToServer(new RecipeDeletePayload(recipeId, delete));
     }
 
     public static void syncToAllPlayers() {
         SyncDisabledRecipesPayload payload = createSyncPayload();
+        SyncPendingRecipeDeletesPayload pendingDeletesPayload = createPendingDeletesPayload();
         for (ServerPlayer player : net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayers()) {
             sendToPlayerIfSupported(player, payload);
+            sendToPlayerIfSupported(player, pendingDeletesPayload);
         }
     }
 
@@ -55,8 +60,10 @@ public class NetworkHandler {
 
     public static void syncEmptyToAllPlayers() {
         SyncDisabledRecipesPayload payload = new SyncDisabledRecipesPayload(List.of());
+        SyncPendingRecipeDeletesPayload pendingDeletesPayload = createPendingDeletesPayload();
         for (ServerPlayer player : net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayers()) {
             sendToPlayerIfSupported(player, payload);
+            sendToPlayerIfSupported(player, pendingDeletesPayload);
         }
     }
 
@@ -69,6 +76,7 @@ public class NetworkHandler {
 
     public static void syncToPlayer(ServerPlayer player) {
         sendToPlayerIfSupported(player, createSyncPayload());
+        sendToPlayerIfSupported(player, createPendingDeletesPayload());
     }
 
     private static SyncDisabledRecipesPayload createSyncPayload() {
@@ -82,8 +90,12 @@ public class NetworkHandler {
         return new SyncDisabledRecipesPayload(entries);
     }
 
-    private static void sendToPlayerIfSupported(ServerPlayer player, SyncDisabledRecipesPayload payload) {
-        if (NetworkRegistry.hasChannel(player.connection, SyncDisabledRecipesPayload.TYPE.id())) {
+    private static SyncPendingRecipeDeletesPayload createPendingDeletesPayload() {
+        return new SyncPendingRecipeDeletesPayload(new ArrayList<>(GeneratedRecipesManager.getPendingGeneratedRecipeDeletes()));
+    }
+
+    private static void sendToPlayerIfSupported(ServerPlayer player, CustomPacketPayload payload) {
+        if (NetworkRegistry.hasChannel(player.connection, payload.type().id())) {
             PacketDistributor.sendToPlayer(player, payload);
         }
     }

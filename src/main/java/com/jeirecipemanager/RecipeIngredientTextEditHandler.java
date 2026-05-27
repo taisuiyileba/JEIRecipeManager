@@ -12,6 +12,7 @@ import mezz.jei.gui.recipes.RecipesGui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.Rect2i;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
@@ -36,7 +37,9 @@ public class RecipeIngredientTextEditHandler {
                 if (!(slotView instanceof IRecipeSlotDrawable slot)) {
                     continue;
                 }
-                if (mouseButton == 2 && slot.getRole() != RecipeIngredientRole.INPUT) {
+                if (mouseButton == 2 &&
+                    slot.getRole() != RecipeIngredientRole.INPUT &&
+                    slot.getRole() != RecipeIngredientRole.OUTPUT) {
                     continue;
                 }
                 if (mouseButton == 0 &&
@@ -46,14 +49,21 @@ public class RecipeIngredientTextEditHandler {
                 }
                 if (isMouseOver(layout, slot, mouseX, mouseY)) {
                     if (mouseButton == 0) {
+                        if (!RecipeEditManager.canClearSlots(recipeId, layout.getRecipe())) {
+                            return true;
+                        }
                         if (hasCarriedItem()) {
                             return false;
                         }
-                        RecipeEditManager.clearSlot(recipeId, slots, slot);
-                        return true;
+                        return RecipeEditManager.clearSlot(recipeId, slots, slot);
                     }
 
-                    String initialValue = RecipeEditManager.getInputSlotText(recipeId, layout.getRecipe(), slots, slot).orElse("");
+                    RecipeEditManager.IngredientEditValue initialValue = RecipeEditManager.getSlotEditValue(recipeId, layout.getRecipe(), slots, slot)
+                        .orElseGet(() -> new RecipeEditManager.IngredientEditValue(
+                            RecipeEditManager.getSlotIngredientKind(recipeId, layout.getRecipe(), slots, slot),
+                            "",
+                            1
+                        ));
                     Minecraft.getInstance().setScreen(new RecipeIngredientTextEditScreen(
                         (Screen) gui,
                         recipeId,
@@ -74,6 +84,18 @@ public class RecipeIngredientTextEditHandler {
             return false;
         }
         return !minecraft.player.containerMenu.getCarried().isEmpty();
+    }
+
+    private static void showClearUnsupportedMessage() {
+        Minecraft minecraft = Minecraft.getInstance();
+        // 使用简洁的消息提示，在屏幕底部显示，不遮挡配方界面
+        Component message = Component.translatableWithFallback(
+            "jeirecipemanager.message.clear_slot.unsupported",
+            "非工作台配方无法清空槽位"
+        );
+        if (minecraft.player != null) {
+            minecraft.player.displayClientMessage(message, false);
+        }
     }
 
     public static boolean handleEditClick(Screen screen, double mouseX, double mouseY, int mouseButton) {

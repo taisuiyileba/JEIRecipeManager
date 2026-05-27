@@ -1,7 +1,10 @@
 package com.jeirecipemanager;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
 import com.jeirecipemanager.mixin.IngredientFilterApiAccessor;
 import com.mojang.serialization.JsonOps;
 import mezz.jei.api.IModPlugin;
@@ -17,9 +20,14 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
+import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,9 +39,16 @@ import java.util.Set;
 @JeiPlugin
 public class JeiRecipeManagerPlugin implements IModPlugin {
     private static final Logger LOGGER = LoggerFactory.getLogger("JEIRecipeManager");
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Type CATEGORY_CACHE_TYPE = new TypeToken<Map<String, Set<String>>>(){}.getType();
+    private static final Path CATEGORY_CACHE_PATH = FMLPaths.GAMEDIR.get()
+        .resolve("config")
+        .resolve("jeirecipemanager_recipe_categories.json");
     private static IJeiRuntime jeiRuntime;
     private static boolean showDisabledRecipes = true;
     private static AppliedVisibilityState appliedVisibilityState;
+    private static final Map<String, Set<ResourceLocation>> knownRecipeCategoryUids = new HashMap<>();
+    private static boolean loadedRecipeCategoryCache = false;
 
     @Override
     public ResourceLocation getPluginUid() {
@@ -44,6 +59,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
     public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
         JeiRecipeManagerPlugin.jeiRuntime = jeiRuntime;
         RecipeManagerState.setRecipeManager(jeiRuntime.getRecipeManager());
+        loadRecipeCategoryCache();
         updateRecipeVisibility();
         collectGeneratedRecipeOutputs();
     }
@@ -62,6 +78,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         if (currentState.equals(appliedVisibilityState)) {
             return;
         }
+        rememberVisibleRecipeCategories(jeiRuntime.getRecipeManager());
         removeInjectedDisabledRecipesFromJei();
         injectDisabledRecipesIntoJei();
         if(showDisabledRecipes){
@@ -128,13 +145,15 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
 
             RecipeHolder<?> holder = new RecipeHolder<>(id, recipe);
             getRecipeResultItemId(recipe).ifPresent(disabledRecipeOutputs::add);
-            RecipeType<?> jeiType = findJeiRecipeType(recipeManager, holder);
-            if (jeiType == null) {
+            List<RecipeType<?>> jeiTypes = findJeiRecipeTypes(recipeManager, holder);
+            if (jeiTypes.isEmpty()) {
                 LOGGER.debug("No JEI category found for recipe: {}", recipeId);
                 continue;
             }
 
-            recipesByType.computeIfAbsent(jeiType, k -> new ArrayList<>()).add(holder);
+            for (RecipeType<?> jeiType : jeiTypes) {
+                recipesByType.computeIfAbsent(jeiType, k -> new ArrayList<>()).add(holder);
+            }
         }
 
         DisabledRecipesManager.setClientDisabledRecipeOutputs(disabledRecipeOutputs);
@@ -237,20 +256,161 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         }
     }
 
-    private static RecipeType<?> findJeiRecipeType(IRecipeManager recipeManager, RecipeHolder<?> holder) {
-        net.minecraft.world.item.crafting.RecipeType<?> mcType = holder.value().getType();
-        ResourceLocation mcTypeId = BuiltInRegistries.RECIPE_TYPE.getKey(mcType);
-        if (mcTypeId == null) {
-            return null;
+    private static void loadRecipeCategoryCache() {
+        if (loadedRecipeCategoryCache) {
+            return;
         }
+        loadedRecipeCategoryCache = true;
+        if (!Files.exists(CATEGORY_CACHE_PATH)) {
+            return;
+        }
+        try {
+            Map<String, Set<String>> loaded = GSON.fromJson(Files.readString(CATEGORY_CACHE_PATH), CATEGORY_CACHE_TYPE);
+            if (loaded == null) {
+                return;
+            }
+            knownRecipeCategoryUids.clear();
+            for (var entry : loaded.entrySet()) {
+                Set<ResourceLocation> categoryUids = new HashSet<>();
+                for (String categoryUid : entry.getValue()) {
+                    ResourceLocation parsed = ResourceLocation.tryParse(categoryUid);
+                    if (parsed != null) {
+                        categoryUids.add(parsed);
+                    }
+                }
+                if (!categoryUids.isEmpty()) {
+                    knownRecipeCategoryUids.put(entry.getKey(), categoryUids);
+                }
+            }
+            LOGGER.info("Loaded JEI category cache for {} recipes", knownRecipeCategoryUids.size());
+        } catch (IOException e) {
+            LOGGER.warn("Failed to load JEI recipe category cache", e);
+        }
+    }
 
+    private static void saveRecipeCategoryCache() {
+        try {
+            Map<String, Set<String>> serialized = new HashMap<>();
+            for (var entry : knownRecipeCategoryUids.entrySet()) {
+                Set<String> categoryUids = new HashSet<>();
+                for (ResourceLocation categoryUid : entry.getValue()) {
+                    categoryUids.add(categoryUid.toString());
+                }
+                serialized.put(entry.getKey(), categoryUids);
+            }
+            Files.createDirectories(CATEGORY_CACHE_PATH.getParent());
+            Files.writeString(CATEGORY_CACHE_PATH, GSON.toJson(serialized));
+        } catch (IOException e) {
+            LOGGER.warn("Failed to save JEI recipe category cache", e);
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void rememberVisibleRecipeCategories(IRecipeManager recipeManager) {
+        boolean[] changed = {false};
         List<IRecipeCategory<?>> categories = recipeManager.createRecipeCategoryLookup().get().toList();
         for (IRecipeCategory<?> category : categories) {
-            if (category.getRecipeType().getUid().equals(mcTypeId)) {
-                return category.getRecipeType();
+            RecipeType<?> recipeType = category.getRecipeType();
+            recipeManager.createRecipeLookup((RecipeType) recipeType)
+                .includeHidden()
+                .get()
+                .forEach(recipe -> {
+                    ResourceLocation registryName = ((IRecipeCategory) category).getRegistryName(recipe);
+                    if (registryName != null) {
+                        boolean added = knownRecipeCategoryUids
+                            .computeIfAbsent(registryName.toString(), key -> new HashSet<>())
+                            .add(recipeType.getUid());
+                        if (added) {
+                            changed[0] = true;
+                        }
+                    }
+                });
+        }
+        if (changed[0]) {
+            saveRecipeCategoryCache();
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static List<RecipeType<?>> findJeiRecipeTypes(IRecipeManager recipeManager, RecipeHolder<?> holder) {
+        ResourceLocation holderId = holder.id();
+        List<IRecipeCategory<?>> categories = recipeManager.createRecipeCategoryLookup().get().toList();
+        List<RecipeType<?>> knownTypes = findKnownJeiRecipeTypes(categories, holderId);
+        if (!knownTypes.isEmpty()) {
+            return knownTypes;
+        }
+
+        net.minecraft.world.item.crafting.RecipeType<?> mcType = holder.value().getType();
+        ResourceLocation mcTypeId = BuiltInRegistries.RECIPE_TYPE.getKey(mcType);
+        List<RecipeType<?>> directTypes = new ArrayList<>();
+        if (mcTypeId != null) {
+            for (IRecipeCategory<?> category : categories) {
+                if (category.getRecipeType().getUid().equals(mcTypeId) && acceptsRecipeHolder(category, holder)) {
+                    directTypes.add(category.getRecipeType());
+                }
             }
         }
-        return null;
+        if (!directTypes.isEmpty()) {
+            return directTypes;
+        }
+
+        List<RecipeType<?>> compatibleTypes = new ArrayList<>();
+        for (IRecipeCategory<?> category : categories) {
+            if (!acceptsRecipeHolder(category, holder)) {
+                continue;
+            }
+            if (categoryContainsMinecraftRecipeType(recipeManager, category, mcType)) {
+                compatibleTypes.add(category.getRecipeType());
+            }
+        }
+        return compatibleTypes;
+    }
+
+    private static List<RecipeType<?>> findKnownJeiRecipeTypes(List<IRecipeCategory<?>> categories, ResourceLocation recipeId) {
+        Set<ResourceLocation> knownUids = knownRecipeCategoryUids.get(recipeId.toString());
+        if (knownUids == null || knownUids.isEmpty()) {
+            return List.of();
+        }
+
+        List<RecipeType<?>> result = new ArrayList<>();
+        for (IRecipeCategory<?> category : categories) {
+            if (knownUids.contains(category.getRecipeType().getUid())) {
+                result.add(category.getRecipeType());
+            }
+        }
+        return result;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean acceptsRecipeHolder(IRecipeCategory<?> category, RecipeHolder<?> holder) {
+        if (!category.getRecipeType().getRecipeClass().isInstance(holder)) {
+            return false;
+        }
+        try {
+            return ((IRecipeCategory) category).isHandled(holder);
+        } catch (Exception e) {
+            LOGGER.debug("JEI category {} rejected recipe holder {}", category.getRecipeType().getUid(), holder.id(), e);
+            return false;
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean categoryContainsMinecraftRecipeType(
+        IRecipeManager recipeManager,
+        IRecipeCategory<?> category,
+        net.minecraft.world.item.crafting.RecipeType<?> mcType
+    ) {
+        RecipeType<?> recipeType = category.getRecipeType();
+        try {
+            return recipeManager.createRecipeLookup((RecipeType) recipeType)
+                .includeHidden()
+                .get()
+                .filter(RecipeHolder.class::isInstance)
+                .anyMatch(existing -> ((RecipeHolder<?>) existing).value().getType() == mcType);
+        } catch (Exception e) {
+            LOGGER.debug("Failed to inspect JEI recipes in category {}", recipeType.getUid(), e);
+            return false;
+        }
     }
 
     @SuppressWarnings("unchecked")

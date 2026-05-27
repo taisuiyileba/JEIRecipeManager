@@ -17,12 +17,16 @@
   "jeirecipemanager.message.recipe_add.success": "生成配方已添加。请运行 /reload 以使更改生效。",
   "jeirecipemanager.message.recipe_add.modify_success": "生成配方已修改。请运行 /reload 以使更改生效。",
   "jeirecipemanager.message.recipe_add.failure": "无法从此模板生成配方",
-  "jeirecipemanager.tooltip.recipe_delete.generated": "删除生成的配方",
+  "jeirecipemanager.tooltip.recipe_delete.generated": "\u6807\u8bb0\u5220\u9664\u751f\u6210\u7684\u914d\u65b9",
+  "jeirecipemanager.tooltip.recipe_delete.pending": "\u751f\u6210\u914d\u65b9\u5df2\u6807\u8bb0\u5220\u9664\uff08\u70b9\u51fb\u6062\u590d\uff09",
   "jeirecipemanager.message.recipe_delete.no_permission": "只有管理员才能删除生成的配方",
-  "jeirecipemanager.message.recipe_delete.success": "生成配方已删除。请运行 /reload 以使更改生效。",
+  "jeirecipemanager.message.recipe_delete.marked": "\u751f\u6210\u914d\u65b9\u5df2\u6807\u8bb0\u5220\u9664\u3002\u8bf7\u8fd0\u884c /reload \u4ee5\u5220\u9664\u5b83\u3002",
+  "jeirecipemanager.message.recipe_delete.unmarked": "\u5df2\u53d6\u6d88\u751f\u6210\u914d\u65b9\u7684\u5220\u9664\u6807\u8bb0\u3002",
   "jeirecipemanager.message.recipe_delete.failure": "删除生成配方失败",
   "jeirecipemanager.screen.ingredient_edit.title": "编辑输入材料",
   "jeirecipemanager.screen.ingredient_edit.input": "物品ID或#标签",
+  "jeirecipemanager.screen.ingredient_edit.amount": "\u6570\u91cf",
+  "jeirecipemanager.screen.ingredient_edit.potion": "\u836f\u6c34ID",
   "jeirecipemanager.screen.ingredient_edit.confirm": "确定",
   "jeirecipemanager.screen.ingredient_edit.cancel": "取消"
 }

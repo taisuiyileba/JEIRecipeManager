@@ -125,6 +125,7 @@ dependencies {
     implementation "curse.maven:jei-238222:7420587"
     runtimeOnly "curse.maven:re-avaritia-623969:8099035"
     runtimeOnly "curse.maven:create-328085:7963363"
+    runtimeOnly "curse.maven:mekanism-268560:7904058"
     // Example mod dependency using a file as dependency
     // implementation files("libs/coolmod-${mc_version}-${coolmod_version}.jar")
 

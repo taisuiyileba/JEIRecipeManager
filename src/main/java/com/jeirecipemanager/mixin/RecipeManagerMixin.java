@@ -2,6 +2,7 @@ package com.jeirecipemanager.mixin;
 
 import com.google.gson.JsonElement;
 import com.jeirecipemanager.DisabledRecipesManager;
+import com.jeirecipemanager.GeneratedRecipesManager;
 import com.jeirecipemanager.network.NetworkHandler;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -29,7 +30,9 @@ public class RecipeManagerMixin {
     )
     private void jeirecipemanager_removeDisabledRecipes(Map<ResourceLocation, JsonElement> map, ResourceManager resourceManager, ProfilerFiller profiler, CallbackInfo ci) {
         DisabledRecipesManager.serverInit();
+        GeneratedRecipesManager.serverInit();
         DisabledRecipesManager.serverReload();
+        GeneratedRecipesManager.serverApplyPendingDeletes(map);
         Map<String, String> allRecipeJsonMap = new HashMap<>();
         for (var entry : map.entrySet()) {
             allRecipeJsonMap.put(entry.getKey().toString(), entry.getValue().toString());

@@ -9,7 +9,6 @@ import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.inputs.IJeiUserInput;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.common.gui.elements.DrawableResource;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.RecipeHolder;
@@ -49,7 +48,7 @@ public class RecipeDisableButtonController implements IIconButtonController {
     @Override
     public void updateState(IButtonState state) {
         if (generatedRecipe) {
-            state.setForcePressed(false);
+            state.setForcePressed(GeneratedRecipesManager.isGeneratedRecipeDeletionPending(recipeId));
             state.setIcon(deleteIcon);
             return;
         }
@@ -66,10 +65,9 @@ public class RecipeDisableButtonController implements IIconButtonController {
     public boolean onPress(IJeiUserInput input) {
         if (!input.isSimulate() && !this.recipeId.isEmpty()) {
             if (generatedRecipe) {
-                NetworkHandler.sendRecipeDelete(recipeId);
-                if (Minecraft.getInstance().screen != null) {
-                    Minecraft.getInstance().screen.onClose();
-                }
+                boolean pendingDelete = !GeneratedRecipesManager.isGeneratedRecipeDeletionPending(recipeId);
+                GeneratedRecipesManager.clientSetGeneratedRecipeDeletionPending(recipeId, pendingDelete);
+                NetworkHandler.sendRecipeDelete(recipeId, pendingDelete);
                 return true;
             }
             this.enabled = !this.enabled;
@@ -81,7 +79,9 @@ public class RecipeDisableButtonController implements IIconButtonController {
     @Override
     public void getTooltips(ITooltipBuilder tooltip) {
         if (generatedRecipe) {
-            tooltip.add(Component.translatable("jeirecipemanager.tooltip.recipe_delete.generated"));
+            tooltip.add(Component.translatable(GeneratedRecipesManager.isGeneratedRecipeDeletionPending(recipeId)
+                ? "jeirecipemanager.tooltip.recipe_delete.pending"
+                : "jeirecipemanager.tooltip.recipe_delete.generated"));
             return;
         }
         if (enabled) {

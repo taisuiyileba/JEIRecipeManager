@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -15,16 +16,66 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 public class GeneratedRecipesManager {
     private static final Logger LOGGER = LoggerFactory.getLogger("JEIRecipeManager");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Type SET_TYPE = new TypeToken<Set<String>>(){}.getType();
     private static final String PACK_DIR = "jeirecipemanager_generated";
     private static final String KEY_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~";
+    private static final CopyOnWriteArraySet<String> pendingGeneratedRecipeDeletes = new CopyOnWriteArraySet<>();
+    private static Path pendingDeletesConfigPath;
+    private static boolean serverInitialized = false;
+
+    public static void serverInit() {
+        if (!serverInitialized) {
+            pendingDeletesConfigPath = FMLPaths.GAMEDIR.get().resolve("config").resolve("pending_generated_recipe_deletes.json");
+            loadPendingDeletes();
+            serverInitialized = true;
+            LOGGER.info("Server initialized GeneratedRecipesManager with {} pending generated recipe deletes",
+                pendingGeneratedRecipeDeletes.size());
+        }
+    }
+
+    private static void loadPendingDeletes() {
+        if (pendingDeletesConfigPath != null && Files.exists(pendingDeletesConfigPath)) {
+            try {
+                String json = Files.readString(pendingDeletesConfigPath);
+                Set<String> loaded = GSON.fromJson(json, SET_TYPE);
+                pendingGeneratedRecipeDeletes.clear();
+                if (loaded != null) {
+                    pendingGeneratedRecipeDeletes.addAll(loaded);
+                }
+                LOGGER.info("Loaded {} pending generated recipe deletes", pendingGeneratedRecipeDeletes.size());
+            } catch (IOException e) {
+                LOGGER.error("Failed to load pending generated recipe deletes config", e);
+            }
+        }
+    }
+
+    private static void savePendingDeletes() {
+        if (pendingDeletesConfigPath == null) {
+            LOGGER.error("Cannot save pending generated recipe deletes: config path is null");
+            return;
+        }
+        try {
+            String json = GSON.toJson(pendingGeneratedRecipeDeletes);
+            Files.createDirectories(pendingDeletesConfigPath.getParent());
+            Files.writeString(pendingDeletesConfigPath, json);
+            LOGGER.info("Saved {} pending generated recipe deletes", pendingGeneratedRecipeDeletes.size());
+        } catch (IOException e) {
+            LOGGER.error("Failed to save pending generated recipe deletes config", e);
+        }
+    }
 
     public static Result addRecipeFromTemplate(String templateRecipeId, List<RecipeEditManager.SlotReplacement> replacements) {
         String templateJson = DisabledRecipesManager.getServerRecipeJson(templateRecipeId);
@@ -74,7 +125,85 @@ public class GeneratedRecipesManager {
         return id != null && id.getNamespace().equals(Jeirecipemanager.MODID) && id.getPath().startsWith("generated/");
     }
 
-    public static boolean deleteGeneratedRecipe(String recipeId) {
+    public static boolean serverSetGeneratedRecipeDeletionPending(String recipeId, boolean pending) {
+        serverInit();
+        if (!isGeneratedRecipeId(recipeId)) {
+            return false;
+        }
+
+        boolean changed = pending
+            ? pendingGeneratedRecipeDeletes.add(recipeId)
+            : pendingGeneratedRecipeDeletes.remove(recipeId);
+        if (changed) {
+            savePendingDeletes();
+        }
+        LOGGER.info("{} generated recipe delete for {}", pending ? "Marked" : "Unmarked", recipeId);
+        return true;
+    }
+
+    public static Set<String> getPendingGeneratedRecipeDeletes() {
+        return new HashSet<>(pendingGeneratedRecipeDeletes);
+    }
+
+    public static boolean isGeneratedRecipeDeletionPending(String recipeId) {
+        return pendingGeneratedRecipeDeletes.contains(recipeId);
+    }
+
+    public static void clientUpdatePendingGeneratedRecipeDeletes(List<String> recipeIds) {
+        pendingGeneratedRecipeDeletes.clear();
+        pendingGeneratedRecipeDeletes.addAll(recipeIds);
+        LOGGER.info("Client received {} pending generated recipe deletes from server",
+            pendingGeneratedRecipeDeletes.size());
+    }
+
+    public static void clientSetGeneratedRecipeDeletionPending(String recipeId, boolean pending) {
+        if (!isGeneratedRecipeId(recipeId)) {
+            return;
+        }
+        if (pending) {
+            pendingGeneratedRecipeDeletes.add(recipeId);
+        } else {
+            pendingGeneratedRecipeDeletes.remove(recipeId);
+        }
+    }
+
+    public static Set<String> serverApplyPendingDeletes(Map<ResourceLocation, JsonElement> recipeMap) {
+        serverInit();
+        Set<String> deletedRecipes = new HashSet<>();
+        boolean changed = false;
+
+        for (String recipeId : getPendingGeneratedRecipeDeletes()) {
+            ResourceLocation id = ResourceLocation.tryParse(recipeId);
+            if (id == null || !isGeneratedRecipeId(recipeId)) {
+                pendingGeneratedRecipeDeletes.remove(recipeId);
+                changed = true;
+                continue;
+            }
+
+            Path recipePath = getRecipePath(id);
+            boolean removedFromReload = recipeMap.remove(id) != null;
+            boolean deletedFile = deleteGeneratedRecipeFile(recipeId);
+            if (deletedFile || !Files.exists(recipePath)) {
+                pendingGeneratedRecipeDeletes.remove(recipeId);
+                deletedRecipes.add(recipeId);
+                changed = true;
+            } else if (removedFromReload) {
+                LOGGER.warn("Generated recipe {} was removed from this reload, but its file still exists; delete will be retried", recipeId);
+            } else {
+                LOGGER.warn("Generated recipe {} is still pending delete because its file could not be removed", recipeId);
+            }
+        }
+
+        if (changed) {
+            savePendingDeletes();
+        }
+        if (!deletedRecipes.isEmpty()) {
+            LOGGER.info("Applied {} pending generated recipe deletes during reload", deletedRecipes.size());
+        }
+        return deletedRecipes;
+    }
+
+    private static boolean deleteGeneratedRecipeFile(String recipeId) {
         if (!isGeneratedRecipeId(recipeId)) {
             return false;
         }
@@ -134,14 +263,14 @@ public class GeneratedRecipesManager {
             if (replacement.clearsSlot()) {
                 return recipeJson.remove("ingredient") != null;
             }
-            recipeJson.add("ingredient", ingredientJson(replacement.itemId()));
+            recipeJson.add("ingredient", ingredientJson(replacement, recipeJson.get("ingredient")));
             return true;
         }
         return applyGenericInput(recipeJson, replacement);
     }
 
     private static boolean applyOutput(JsonObject recipeJson, RecipeEditManager.SlotReplacement replacement) {
-        if (replacement.clearsSlot()) {
+        if (replacement.clearsSlot() || replacement.isFluid()) {
             return false;
         }
         JsonObject itemStack = itemStackJson(replacement.itemId(), replacement.count());
@@ -200,7 +329,7 @@ public class GeneratedRecipesManager {
             if (gridIndex < 0 || gridIndex >= grid.length) {
                 continue;
             }
-            grid[gridIndex] = replacement.clearsSlot() ? null : ingredientJson(replacement.itemId());
+            grid[gridIndex] = replacement.clearsSlot() ? null : ingredientJson(replacement, grid[gridIndex]);
             changed = true;
         }
         if (!changed) {
@@ -262,12 +391,12 @@ public class GeneratedRecipesManager {
             if (replacement.clearsSlot()) {
                 ingredients.remove(gridIndex);
             } else {
-                ingredients.set(gridIndex, ingredientJson(replacement.itemId()));
+                ingredients.set(gridIndex, ingredientJson(replacement, ingredients.get(gridIndex)));
             }
             return true;
         }
         if (gridIndex >= ingredients.size() && !replacement.clearsSlot()) {
-            ingredients.add(ingredientJson(replacement.itemId()));
+            ingredients.add(ingredientJson(replacement, null));
             return true;
         }
         return false;
@@ -281,7 +410,7 @@ public class GeneratedRecipesManager {
                 if (replacement.clearsSlot()) {
                     ingredients.remove(slotIndex);
                 } else {
-                    ingredients.set(slotIndex, ingredientJson(replacement.itemId()));
+                    ingredients.set(slotIndex, ingredientJson(replacement, ingredients.get(slotIndex)));
                 }
                 return true;
             }
@@ -290,11 +419,18 @@ public class GeneratedRecipesManager {
             if (replacement.clearsSlot()) {
                 recipeJson.remove("ingredient");
             } else {
-                recipeJson.add("ingredient", ingredientJson(replacement.itemId()));
+                recipeJson.add("ingredient", ingredientJson(replacement, recipeJson.get("ingredient")));
             }
             return true;
         }
         return false;
+    }
+
+    private static JsonObject ingredientJson(RecipeEditManager.SlotReplacement replacement, JsonElement originalIngredient) {
+        if (replacement.isFluid()) {
+            return fluidIngredientJson(replacement.itemId(), Math.max(1, replacement.count()), replacement.extraId(), originalIngredient);
+        }
+        return ingredientJson(replacement.itemId());
     }
 
     private static JsonObject ingredientJson(String itemId) {
@@ -305,6 +441,69 @@ public class GeneratedRecipesManager {
             object.addProperty("item", itemId);
         }
         return object;
+    }
+
+    private static JsonObject fluidIngredientJson(String fluidId, int amount, String potionId, JsonElement originalIngredient) {
+        if (originalIngredient != null && originalIngredient.isJsonObject()) {
+            JsonObject original = originalIngredient.getAsJsonObject();
+            if (fluidId.equals(fluidIngredientIdText(original).orElse(null))) {
+                JsonObject copy = original.deepCopy();
+                copy.addProperty("amount", amount);
+                applyCreatePotionComponent(copy, fluidId, potionId);
+                return copy;
+            }
+        }
+
+        JsonObject object = new JsonObject();
+        if (fluidId.startsWith("#")) {
+            object.addProperty("type", "neoforge:tag");
+            object.addProperty("tag", fluidId.substring(1));
+        } else {
+            object.addProperty("type", "neoforge:single");
+            object.addProperty("fluid", fluidId);
+        }
+        object.addProperty("amount", amount);
+        applyCreatePotionComponent(object, fluidId, potionId);
+        return object;
+    }
+
+    private static java.util.Optional<String> fluidIngredientIdText(JsonObject object) {
+        if (object.has("tag")) {
+            return java.util.Optional.of("#" + object.get("tag").getAsString());
+        }
+        if (object.has("fluid")) {
+            return java.util.Optional.of(object.get("fluid").getAsString());
+        }
+        if (object.has("fluids")) {
+            return java.util.Optional.of(object.get("fluids").getAsString());
+        }
+        return java.util.Optional.empty();
+    }
+
+    private static void applyCreatePotionComponent(JsonObject object, String fluidId, String potionId) {
+        if (!"create:potion".equals(fluidId) || potionId == null || potionId.isBlank()) {
+            return;
+        }
+        JsonObject components;
+        if (object.has("components") && object.get("components").isJsonObject()) {
+            components = object.getAsJsonObject("components");
+        } else {
+            components = new JsonObject();
+            object.add("components", components);
+        }
+
+        JsonObject potionContents;
+        JsonElement potionContentsElement = components.get("minecraft:potion_contents");
+        if (potionContentsElement != null && potionContentsElement.isJsonObject()) {
+            potionContents = potionContentsElement.getAsJsonObject();
+        } else {
+            potionContents = new JsonObject();
+            components.add("minecraft:potion_contents", potionContents);
+        }
+        if (!components.has("create:potion_fluid_bottle_type")) {
+            components.addProperty("create:potion_fluid_bottle_type", "regular");
+        }
+        potionContents.addProperty("potion", potionId);
     }
 
     private static JsonObject itemStackJson(String itemId, int count) {

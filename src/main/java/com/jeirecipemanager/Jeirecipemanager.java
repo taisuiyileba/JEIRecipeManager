@@ -45,6 +45,7 @@ public class Jeirecipemanager
     public void onServerStarting(ServerStartingEvent event)
     {
         DisabledRecipesManager.serverInit();
+        GeneratedRecipesManager.serverInit();
         LOGGER.info("JEIRecipeManager server starting, loaded {} disabled recipes",
             DisabledRecipesManager.getDisabledRecipes().size());
     }
