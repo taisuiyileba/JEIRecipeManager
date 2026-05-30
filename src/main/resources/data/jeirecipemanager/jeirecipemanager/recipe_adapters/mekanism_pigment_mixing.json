@@ -1,0 +1,29 @@
+{
+  "recipe_type": "mekanism:pigment_mixing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/left_input/chemical",
+        "/left_input/tag"
+      ],
+      "amount_path": "/left_input/amount"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "paths": [
+        "/right_input/chemical",
+        "/right_input/tag"
+      ],
+      "amount_path": "/right_input/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/id",
+      "amount_path": "/output/amount"
+    }
+  ]
+}

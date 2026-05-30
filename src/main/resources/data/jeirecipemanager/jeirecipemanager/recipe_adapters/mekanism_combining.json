@@ -1,0 +1,29 @@
+{
+  "recipe_type": "mekanism:combining",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/main_input/item",
+        "/main_input/tag"
+      ],
+      "amount_path": "/main_input/count"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "paths": [
+        "/extra_input/item",
+        "/extra_input/tag"
+      ],
+      "amount_path": "/extra_input/count"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/id",
+      "amount_path": "/output/count"
+    }
+  ]
+}

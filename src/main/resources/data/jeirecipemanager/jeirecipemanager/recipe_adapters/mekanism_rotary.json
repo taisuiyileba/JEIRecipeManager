@@ -1,0 +1,33 @@
+{
+  "recipe_type": "mekanism:rotary",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/chemical_input/chemical"
+      ],
+      "amount_path": "/chemical_input/amount"
+    },
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/fluid_input/tag"
+      ],
+      "amount_path": "/fluid_input/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/chemical_output/id",
+      "amount_path": "/chemical_output/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 1,
+      "path": "/fluid_output/id",
+      "amount_path": "/fluid_output/amount"
+    }
+  ]
+}

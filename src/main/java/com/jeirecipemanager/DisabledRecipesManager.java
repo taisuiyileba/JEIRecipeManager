@@ -38,10 +38,11 @@ public class DisabledRecipesManager {
     private static final CopyOnWriteArraySet<ResourceLocation> clientDisabledRecipeOutputs = new CopyOnWriteArraySet<>();
     private static final CopyOnWriteArraySet<ResourceLocation> clientGeneratedRecipeOutputs = new CopyOnWriteArraySet<>();
     private static final List<InjectedRecipe> clientInjectedRecipes = new CopyOnWriteArrayList<>();
+    private static volatile boolean clientRecipeStateSynced = false;
 
     public static void serverInit() {
         if (!serverInitialized) {
-            configPath = FMLPaths.GAMEDIR.get().resolve("config").resolve("disabled_recipes.json");
+            configPath = FMLPaths.GAMEDIR.get().resolve("config").resolve(Jeirecipemanager.MODID).resolve("disabled_recipes.json");
             load();
             serverInitialized = true;
             LOGGER.info("Server initialized DisabledRecipesManager with {} disabled recipes", disabledRecipes.size());
@@ -111,8 +112,13 @@ public class DisabledRecipesManager {
         disabledRecipes.addAll(recipes);
         clientRecipeJsonCache.clear();
         clientRecipeJsonCache.putAll(recipeJsonMap);
+        clientRecipeStateSynced = true;
         LOGGER.info("Client received {} disabled recipes from server ({} with JSON data)",
             disabledRecipes.size(), recipeJsonMap.size());
+    }
+
+    public static boolean hasClientRecipeStateSynced() {
+        return clientRecipeStateSynced;
     }
 
     public static Map<String, String> getClientRecipeJsonCache() {

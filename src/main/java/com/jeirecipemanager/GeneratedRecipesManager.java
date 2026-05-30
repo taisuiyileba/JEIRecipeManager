@@ -38,7 +38,7 @@ public class GeneratedRecipesManager {
 
     public static void serverInit() {
         if (!serverInitialized) {
-            pendingDeletesConfigPath = FMLPaths.GAMEDIR.get().resolve("config").resolve("pending_generated_recipe_deletes.json");
+            pendingDeletesConfigPath = FMLPaths.GAMEDIR.get().resolve("config").resolve(Jeirecipemanager.MODID).resolve("pending_generated_recipe_deletes.json");
             loadPendingDeletes();
             serverInitialized = true;
             LOGGER.info("Server initialized GeneratedRecipesManager with {} pending generated recipe deletes",
@@ -227,6 +227,11 @@ public class GeneratedRecipesManager {
     }
 
     private static boolean applyReplacements(JsonObject recipeJson, List<RecipeEditManager.SlotReplacement> replacements) {
+        java.util.Optional<Boolean> adapterResult = RecipeAdapterManager.applyReplacements(recipeJson, replacements);
+        if (adapterResult.isPresent()) {
+            return adapterResult.get();
+        }
+
         boolean changed = false;
         String type = getType(recipeJson);
         if (isShapedRecipe(recipeJson, type)) {

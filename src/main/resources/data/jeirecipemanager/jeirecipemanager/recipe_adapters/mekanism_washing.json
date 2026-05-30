@@ -1,0 +1,30 @@
+{
+  "recipe_type": "mekanism:washing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/fluid_input/fluid",
+        "/fluid_input/id",
+        "/fluid_input/tag"
+      ],
+      "amount_path": "/fluid_input/amount"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "paths": [
+        "/chemical_input/chemical",
+        "/chemical_input/tag"
+      ],
+      "amount_path": "/chemical_input/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/id",
+      "amount_path": "/output/amount"
+    }
+  ]
+}

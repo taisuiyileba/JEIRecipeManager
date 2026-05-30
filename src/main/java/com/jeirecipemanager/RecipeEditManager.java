@@ -11,6 +11,7 @@ import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
+import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.core.HolderSet;
@@ -43,16 +44,29 @@ public class RecipeEditManager {
 
     public enum IngredientKind {
         ITEM,
-        FLUID
+        FLUID,
+        RESOURCE;
+
+        public boolean hasAmount() {
+            return this == FLUID || this == RESOURCE;
+        }
     }
 
-    public record IngredientEditValue(IngredientKind kind, String ingredientId, int amount, String detailId) {
+    public record IngredientEditValue(IngredientKind kind, String ingredientId, int amount, String detailId, boolean amountEditable) {
+        public IngredientEditValue(IngredientKind kind, String ingredientId, int amount, String detailId) {
+            this(kind, ingredientId, amount, detailId, kind.hasAmount());
+        }
+
         public IngredientEditValue(IngredientKind kind, String ingredientId, int amount) {
             this(kind, ingredientId, amount, "");
         }
 
         public boolean hasPotionDetail() {
             return kind == IngredientKind.FLUID && !detailId.isBlank();
+        }
+
+        public boolean hasAmount() {
+            return amountEditable;
         }
     }
 
@@ -133,6 +147,36 @@ public class RecipeEditManager {
         applyReplacementToSlot(targetSlot, draft.replacements().get(address.key()));
     }
 
+    public static void replaceResourceSlot(String recipeId, List<IRecipeSlotView> slots, IRecipeSlotDrawable targetSlot, Object stack) {
+        if (!isChemicalStack(stack) || isChemicalStackEmpty(stack)) {
+            return;
+        }
+
+        SlotAddress address = findSlotAddress(slots, targetSlot).orElse(null);
+        if (address == null || !isSupportedRole(address.role())) {
+            return;
+        }
+
+        String resourceId = chemicalStackId(stack).orElse(null);
+        if (resourceId == null) {
+            return;
+        }
+
+        Draft draft = drafts.computeIfAbsent(recipeId, Draft::new);
+        int amountDisplayScale = getSlotAmountDisplayScale(recipeId, null, address);
+        draft.replacements().put(address.key(), new SlotReplacement(
+            address.role().name(),
+            address.roleIndex(),
+            resourceId,
+            recipeAmountFromDisplay(chemicalStackAmount(stack), amountDisplayScale),
+            address.gridWidth(),
+            address.gridHeight(),
+            IngredientKind.RESOURCE.name()
+        ));
+
+        applyReplacementToSlot(targetSlot, draft.replacements().get(address.key()), amountDisplayScale);
+    }
+
     public static void replaceInputSlotText(String recipeId, List<IRecipeSlotView> slots, IRecipeSlotDrawable targetSlot, String inputText) {
         replaceSlotText(recipeId, slots, targetSlot, inputText, 1, "");
     }
@@ -143,6 +187,14 @@ public class RecipeEditManager {
 
     public static void replaceSlotText(String recipeId, List<IRecipeSlotView> slots, IRecipeSlotDrawable targetSlot, String inputText, int amount, String detailText) {
         IngredientKind kind = getSlotIngredientKind(recipeId, null, slots, targetSlot);
+        replaceSlotText(recipeId, slots, targetSlot, inputText, amount, detailText, kind);
+    }
+
+    public static void replaceSlotText(String recipeId, List<IRecipeSlotView> slots, IRecipeSlotDrawable targetSlot, String inputText, int amount, String detailText, IngredientKind kind) {
+        replaceSlotText(recipeId, slots, targetSlot, inputText, amount, detailText, kind, kind.hasAmount());
+    }
+
+    public static void replaceSlotText(String recipeId, List<IRecipeSlotView> slots, IRecipeSlotDrawable targetSlot, String inputText, int amount, String detailText, IngredientKind kind, boolean amountEditable) {
         String normalized = normalizeInputText(inputText, kind);
         if (normalized == null) {
             return;
@@ -162,14 +214,14 @@ public class RecipeEditManager {
             address.role().name(),
             address.roleIndex(),
             normalized,
-            kind == IngredientKind.FLUID ? Math.max(1, amount) : 1,
+            amountEditable ? Math.max(1, amount) : 1,
             address.gridWidth(),
             address.gridHeight(),
             kind.name(),
             normalizedDetail
         ));
 
-        applyReplacementToSlot(targetSlot, draft.replacements().get(address.key()));
+        applyReplacementToSlot(targetSlot, draft.replacements().get(address.key()), getSlotAmountDisplayScale(recipeId, null, address));
     }
 
     public static boolean isValidInputText(String inputText) {
@@ -249,7 +301,13 @@ public class RecipeEditManager {
         if (draft != null) {
             SlotReplacement replacement = draft.replacements().get(address.key());
             if (replacement != null) {
-                return Optional.of(new IngredientEditValue(replacement.kind(), replacement.itemId(), Math.max(1, replacement.count()), replacement.extraId()));
+                return Optional.of(new IngredientEditValue(
+                    replacement.kind(),
+                    replacement.itemId(),
+                    Math.max(1, replacement.count()),
+                    replacement.extraId(),
+                    isSlotAmountEditable(recipeId, recipeObject, address).orElse(replacement.kind().hasAmount())
+                ));
             }
         }
 
@@ -259,6 +317,9 @@ public class RecipeEditManager {
     }
 
     public static IngredientKind getSlotIngredientKind(String recipeId, Object recipeObject, List<IRecipeSlotView> slots, IRecipeSlotDrawable targetSlot) {
+        if (hasChemicalStackIngredient(targetSlot)) {
+            return IngredientKind.RESOURCE;
+        }
         if (targetSlot.getIngredients(NeoForgeTypes.FLUID_STACK).findAny().isPresent()) {
             return IngredientKind.FLUID;
         }
@@ -297,7 +358,7 @@ public class RecipeEditManager {
             }
             SlotReplacement replacement = draft.replacements().get(address.key());
             if (replacement != null) {
-                applyReplacementToSlot(slot, replacement);
+                applyReplacementToSlot(slot, replacement, getSlotAmountDisplayScale(id.toString(), layout.getRecipe(), address));
             }
         }
     }
@@ -348,8 +409,46 @@ public class RecipeEditManager {
     }
 
     private static Optional<IngredientKind> getSlotKindFromRecipeJson(String recipeId, Object recipeObject, SlotAddress address) {
-        return getSlotEditValueFromRecipeJson(recipeId, recipeObject, address, null)
-            .map(IngredientEditValue::kind);
+        String recipeJson = getRecipeJson(recipeId, recipeObject);
+        if (recipeJson == null || recipeJson.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            JsonObject recipe = JsonParser.parseString(recipeJson).getAsJsonObject();
+            return RecipeAdapterManager.getSlotKind(recipe, address.role().name(), address.roleIndex())
+                .or(() -> getSlotEditValueFromRecipeJson(recipeId, recipeObject, address, null)
+                    .map(IngredientEditValue::kind));
+        } catch (Exception ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<Boolean> isSlotAmountEditable(String recipeId, Object recipeObject, SlotAddress address) {
+        String recipeJson = getRecipeJson(recipeId, recipeObject);
+        if (recipeJson == null || recipeJson.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            JsonObject recipe = JsonParser.parseString(recipeJson).getAsJsonObject();
+            return RecipeAdapterManager.isSlotAmountEditable(recipe, address.role().name(), address.roleIndex());
+        } catch (Exception ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private static int getSlotAmountDisplayScale(String recipeId, Object recipeObject, SlotAddress address) {
+        String recipeJson = getRecipeJson(recipeId, recipeObject);
+        if (recipeJson == null || recipeJson.isBlank()) {
+            return 1;
+        }
+        try {
+            JsonObject recipe = JsonParser.parseString(recipeJson).getAsJsonObject();
+            return RecipeAdapterManager.getSlotAmountDisplayScale(recipe, address.role().name(), address.roleIndex())
+                .filter(scale -> scale > 1)
+                .orElse(1);
+        } catch (Exception ignored) {
+            return 1;
+        }
     }
 
     private static Optional<IngredientEditValue> getSlotEditValueFromRecipeJson(String recipeId, Object recipeObject, SlotAddress address, IngredientKind preferredKind) {
@@ -363,6 +462,16 @@ public class RecipeEditManager {
             recipe = JsonParser.parseString(recipeJson).getAsJsonObject();
         } catch (Exception ignored) {
             return Optional.empty();
+        }
+
+        Optional<IngredientEditValue> adapterValue = RecipeAdapterManager.getSlotEditValue(
+            recipe,
+            address.role().name(),
+            address.roleIndex(),
+            preferredKind
+        );
+        if (adapterValue.isPresent()) {
+            return adapterValue;
         }
 
         if (address.role() == RecipeIngredientRole.OUTPUT) {
@@ -580,6 +689,9 @@ public class RecipeEditManager {
             return getInputTextFromFluidSlotTag(slot)
                 .map(tag -> new IngredientEditValue(IngredientKind.FLUID, tag, getDisplayedFluidAmount(slot), ""));
         }
+        if (kind == IngredientKind.RESOURCE) {
+            return getInputEditValueFromChemicalSlotTag(slot);
+        }
         return getInputTextFromItemSlotTag(slot)
             .map(tag -> new IngredientEditValue(IngredientKind.ITEM, tag, 1));
     }
@@ -594,8 +706,19 @@ public class RecipeEditManager {
                     getPotionId(stack).orElse("")
                 ));
         }
+        if (kind == IngredientKind.RESOURCE) {
+            return getDisplayedChemicalEditValue(slot);
+        }
         return slot.getDisplayedItemStack()
             .map(stack -> new IngredientEditValue(IngredientKind.ITEM, itemIdText(stack), 1));
+    }
+
+    private static Optional<IngredientEditValue> getDisplayedChemicalEditValue(IRecipeSlotView slot) {
+        return slot.getDisplayedIngredient()
+            .map(mezz.jei.api.ingredients.ITypedIngredient::getIngredient)
+            .filter(RecipeEditManager::isChemicalStack)
+            .flatMap(stack -> chemicalStackId(stack)
+                .map(id -> new IngredientEditValue(IngredientKind.RESOURCE, id, chemicalStackAmount(stack), "", true)));
     }
 
     private static Optional<String> getInputTextFromItemSlotTag(IRecipeSlotView slot) {
@@ -630,6 +753,20 @@ public class RecipeEditManager {
             .map(Pair::getFirst)
             .map(tagKey -> "#" + tagKey.location())
             .findFirst();
+    }
+
+    private static Optional<IngredientEditValue> getInputEditValueFromChemicalSlotTag(IRecipeSlotView slot) {
+        List<Object> stacks = slot.getAllIngredients()
+            .map(mezz.jei.api.ingredients.ITypedIngredient::getIngredient)
+            .filter(RecipeEditManager::isChemicalStack)
+            .map(Object.class::cast)
+            .toList();
+        if (stacks.size() <= 1) {
+            return Optional.empty();
+        }
+
+        return chemicalTagKeyEquivalent(stacks)
+            .map(tag -> new IngredientEditValue(IngredientKind.RESOURCE, "#" + tag, chemicalStackAmount(stacks.getFirst()), "", true));
     }
 
     private static boolean tagMatchesItems(HolderSet.Named<Item> tag, List<Item> items) {
@@ -701,6 +838,10 @@ public class RecipeEditManager {
     }
 
     private static void applyReplacementToSlot(IRecipeSlotDrawable slot, SlotReplacement replacement) {
+        applyReplacementToSlot(slot, replacement, 1);
+    }
+
+    private static void applyReplacementToSlot(IRecipeSlotDrawable slot, SlotReplacement replacement, int amountDisplayScale) {
         if (replacement.clearsSlot()) {
             slot.clearDisplayOverrides();
             if (replacement.isFluid()) {
@@ -733,6 +874,14 @@ public class RecipeEditManager {
             return;
         }
 
+        if (replacement.kind() == IngredientKind.RESOURCE) {
+            if (!replacement.itemId().startsWith("#")) {
+                chemicalStackFromId(replacement.itemId(), displayAmount(replacement.count(), amountDisplayScale))
+                    .ifPresent(stack -> applyResourceReplacementToSlot(slot, stack));
+            }
+            return;
+        }
+
         if (replacement.itemId().startsWith("#")) {
             List<ItemStack> stacks = getTagStacks(replacement.itemId().substring(1), Math.max(1, replacement.count()));
             if (!stacks.isEmpty()) {
@@ -749,6 +898,29 @@ public class RecipeEditManager {
         ItemStack displayStack = new ItemStack(BuiltInRegistries.ITEM.get(itemId), Math.max(1, replacement.count()));
         slot.clearDisplayOverrides();
         slot.createDisplayOverrides().addIngredient(VanillaTypes.ITEM_STACK, displayStack);
+    }
+
+    private static int displayAmount(int recipeAmount, int amountDisplayScale) {
+        long amount = (long) Math.max(1, recipeAmount) * Math.max(1, amountDisplayScale);
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(1, amount));
+    }
+
+    private static int recipeAmountFromDisplay(int displayAmount, int amountDisplayScale) {
+        int scale = Math.max(1, amountDisplayScale);
+        if (scale <= 1) {
+            return Math.max(1, displayAmount);
+        }
+        return Math.max(1, Math.round((float) Math.max(1, displayAmount) / scale));
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void applyResourceReplacementToSlot(IRecipeSlotDrawable slot, Object stack) {
+        Optional<IIngredientType<?>> chemicalType = getMekanismChemicalIngredientType();
+        if (chemicalType.isEmpty()) {
+            return;
+        }
+        slot.clearDisplayOverrides();
+        slot.createDisplayOverrides().addIngredient((IIngredientType) chemicalType.get(), stack);
     }
 
     private static List<ItemStack> getTagStacks(String tagIdText, int count) {
@@ -800,6 +972,9 @@ public class RecipeEditManager {
         if (id == null) {
             return null;
         }
+        if (kind == IngredientKind.RESOURCE) {
+            return id.toString();
+        }
         if (kind == IngredientKind.FLUID) {
             return BuiltInRegistries.FLUID.containsKey(id) ? id.toString() : null;
         }
@@ -844,6 +1019,105 @@ public class RecipeEditManager {
         }
     }
 
+    public static boolean isChemicalStack(Object ingredient) {
+        return ingredient != null && "mekanism.api.chemical.ChemicalStack".equals(ingredient.getClass().getName());
+    }
+
+    private static boolean hasChemicalStackIngredient(IRecipeSlotView slot) {
+        return slot.getAllIngredients()
+            .map(mezz.jei.api.ingredients.ITypedIngredient::getIngredient)
+            .anyMatch(RecipeEditManager::isChemicalStack);
+    }
+
+    private static boolean isChemicalStackEmpty(Object stack) {
+        try {
+            return (boolean) stack.getClass().getMethod("isEmpty").invoke(stack);
+        } catch (ReflectiveOperationException e) {
+            return true;
+        }
+    }
+
+    private static Optional<String> chemicalStackId(Object stack) {
+        try {
+            Object id = stack.getClass().getMethod("getTypeRegistryName").invoke(stack);
+            return id == null ? Optional.empty() : Optional.of(id.toString());
+        } catch (ReflectiveOperationException e) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<Object> chemicalStackFromId(String chemicalIdText, int amount) {
+        ResourceLocation chemicalId = ResourceLocation.tryParse(chemicalIdText);
+        if (chemicalId == null) {
+            return Optional.empty();
+        }
+        try {
+            Class<?> mekanismApi = Class.forName("mekanism.api.MekanismAPI");
+            Object registry = mekanismApi.getField("CHEMICAL_REGISTRY").get(null);
+            Object chemical = registry.getClass().getMethod("get", ResourceLocation.class).invoke(registry, chemicalId);
+            if (chemical == null) {
+                return Optional.empty();
+            }
+            Class<?> chemicalClass = Class.forName("mekanism.api.chemical.Chemical");
+            Class<?> chemicalStackClass = Class.forName("mekanism.api.chemical.ChemicalStack");
+            return Optional.of(chemicalStackClass
+                .getConstructor(chemicalClass, long.class)
+                .newInstance(chemical, (long) Math.max(1, amount)));
+        } catch (ReflectiveOperationException e) {
+            return Optional.empty();
+        }
+    }
+
+    private static int chemicalStackAmount(Object stack) {
+        try {
+            Object amount = stack.getClass().getMethod("getAmount").invoke(stack);
+            if (amount instanceof Number number) {
+                return (int) Math.max(1, Math.min(Integer.MAX_VALUE, number.longValue()));
+            }
+        } catch (ReflectiveOperationException ignored) {
+        }
+        return 1;
+    }
+
+    private static Optional<String> chemicalTagKeyEquivalent(List<Object> stacks) {
+        Optional<Object> helper = getMekanismJeiChemicalHelper();
+        if (helper.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            Object tagKey = helper.get().getClass()
+                .getMethod("getTagKeyEquivalent", java.util.Collection.class)
+                .invoke(helper.get(), stacks);
+            if (tagKey instanceof Optional<?> optional && optional.isPresent()) {
+                Object location = optional.get().getClass().getMethod("location").invoke(optional.get());
+                return location == null ? Optional.empty() : Optional.of(location.toString());
+            }
+        } catch (ReflectiveOperationException ignored) {
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<IIngredientType<?>> getMekanismChemicalIngredientType() {
+        try {
+            Object type = Class.forName("mekanism.client.recipe_viewer.jei.MekanismJEI")
+                .getField("TYPE_CHEMICAL")
+                .get(null);
+            return type instanceof IIngredientType<?> ingredientType ? Optional.of(ingredientType) : Optional.empty();
+        } catch (ReflectiveOperationException e) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<Object> getMekanismJeiChemicalHelper() {
+        try {
+            return Optional.ofNullable(Class.forName("mekanism.client.recipe_viewer.jei.MekanismJEI")
+                .getField("CHEMICAL_STACK_HELPER")
+                .get(null));
+        } catch (ReflectiveOperationException e) {
+            return Optional.empty();
+        }
+    }
+
     public record SlotReplacement(String role, int slotIndex, String itemId, int count, int gridWidth, int gridHeight, String ingredientKind, String extraId) {
         public SlotReplacement(String role, int slotIndex, String itemId, int count, int gridWidth, int gridHeight, String ingredientKind) {
             this(role, slotIndex, itemId, count, gridWidth, gridHeight, ingredientKind, "");
@@ -858,7 +1132,13 @@ public class RecipeEditManager {
         }
 
         public IngredientKind kind() {
-            return IngredientKind.FLUID.name().equals(ingredientKind) ? IngredientKind.FLUID : IngredientKind.ITEM;
+            if (IngredientKind.FLUID.name().equals(ingredientKind)) {
+                return IngredientKind.FLUID;
+            }
+            if (IngredientKind.RESOURCE.name().equals(ingredientKind)) {
+                return IngredientKind.RESOURCE;
+            }
+            return IngredientKind.ITEM;
         }
 
         public boolean isFluid() {

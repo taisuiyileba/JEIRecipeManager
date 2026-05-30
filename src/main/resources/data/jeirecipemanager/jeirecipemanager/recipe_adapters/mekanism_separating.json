@@ -1,0 +1,23 @@
+{
+  "recipe_type": "mekanism:separating",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "path": "/input/tag",
+      "amount_path": "/input/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/left_chemical_output/id",
+      "amount_path": "/left_chemical_output/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 1,
+      "path": "/right_chemical_output/id",
+      "amount_path": "/right_chemical_output/amount"
+    }
+  ]
+}

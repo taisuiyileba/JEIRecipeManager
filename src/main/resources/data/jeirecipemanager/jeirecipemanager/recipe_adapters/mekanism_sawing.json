@@ -1,0 +1,26 @@
+{
+  "recipe_type": "mekanism:sawing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/input/item",
+        "/input/tag"
+      ],
+      "amount_path": "/input/count"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/main_output/id",
+      "amount_path": "/main_output/count"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 1,
+      "path": "/secondary_output/id",
+      "amount_path": "/secondary_output/count"
+    }
+  ]
+}

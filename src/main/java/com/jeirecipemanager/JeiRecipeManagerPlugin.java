@@ -35,6 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 @JeiPlugin
 public class JeiRecipeManagerPlugin implements IModPlugin {
@@ -43,6 +45,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
     private static final Type CATEGORY_CACHE_TYPE = new TypeToken<Map<String, Set<String>>>(){}.getType();
     private static final Path CATEGORY_CACHE_PATH = FMLPaths.GAMEDIR.get()
         .resolve("config")
+        .resolve(Jeirecipemanager.MODID)
         .resolve("jeirecipemanager_recipe_categories.json");
     private static IJeiRuntime jeiRuntime;
     private static boolean showDisabledRecipes = true;
@@ -288,15 +291,17 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
         }
     }
 
-    private static void saveRecipeCategoryCache() {
+    private static void saveRecipeCategoryCache(Map<String, Set<ResourceLocation>> cache) {
         try {
-            Map<String, Set<String>> serialized = new HashMap<>();
-            for (var entry : knownRecipeCategoryUids.entrySet()) {
-                Set<String> categoryUids = new HashSet<>();
+            Map<String, Set<String>> serialized = new TreeMap<>();
+            for (var entry : cache.entrySet()) {
+                Set<String> categoryUids = new TreeSet<>();
                 for (ResourceLocation categoryUid : entry.getValue()) {
                     categoryUids.add(categoryUid.toString());
                 }
-                serialized.put(entry.getKey(), categoryUids);
+                if (!categoryUids.isEmpty()) {
+                    serialized.put(entry.getKey(), categoryUids);
+                }
             }
             Files.createDirectories(CATEGORY_CACHE_PATH.getParent());
             Files.writeString(CATEGORY_CACHE_PATH, GSON.toJson(serialized));
@@ -307,7 +312,7 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void rememberVisibleRecipeCategories(IRecipeManager recipeManager) {
-        boolean[] changed = {false};
+        Map<String, Set<ResourceLocation>> visibleRecipeCategoryUids = new HashMap<>();
         List<IRecipeCategory<?>> categories = recipeManager.createRecipeCategoryLookup().get().toList();
         for (IRecipeCategory<?> category : categories) {
             RecipeType<?> recipeType = category.getRecipeType();
@@ -317,17 +322,36 @@ public class JeiRecipeManagerPlugin implements IModPlugin {
                 .forEach(recipe -> {
                     ResourceLocation registryName = ((IRecipeCategory) category).getRegistryName(recipe);
                     if (registryName != null) {
-                        boolean added = knownRecipeCategoryUids
+                        visibleRecipeCategoryUids
                             .computeIfAbsent(registryName.toString(), key -> new HashSet<>())
                             .add(recipeType.getUid());
-                        if (added) {
-                            changed[0] = true;
-                        }
                     }
                 });
         }
-        if (changed[0]) {
-            saveRecipeCategoryCache();
+
+        Set<String> disabledRecipes = DisabledRecipesManager.getDisabledRecipes();
+        Map<String, Set<ResourceLocation>> persistedRecipeCategoryUids = new HashMap<>();
+        for (String recipeId : disabledRecipes) {
+            Set<ResourceLocation> currentUids = visibleRecipeCategoryUids.get(recipeId);
+            if (currentUids != null && !currentUids.isEmpty()) {
+                persistedRecipeCategoryUids.put(recipeId, new HashSet<>(currentUids));
+                continue;
+            }
+
+            Set<ResourceLocation> cachedUids = knownRecipeCategoryUids.get(recipeId);
+            if (cachedUids != null && !cachedUids.isEmpty()) {
+                persistedRecipeCategoryUids.put(recipeId, new HashSet<>(cachedUids));
+            }
+        }
+
+        knownRecipeCategoryUids.clear();
+        knownRecipeCategoryUids.putAll(visibleRecipeCategoryUids);
+        for (var entry : persistedRecipeCategoryUids.entrySet()) {
+            knownRecipeCategoryUids.putIfAbsent(entry.getKey(), new HashSet<>(entry.getValue()));
+        }
+
+        if (DisabledRecipesManager.hasClientRecipeStateSynced() || !disabledRecipes.isEmpty()) {
+            saveRecipeCategoryCache(persistedRecipeCategoryUids);
         }
     }
 

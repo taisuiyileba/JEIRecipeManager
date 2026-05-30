@@ -1,0 +1,20 @@
+{
+  "recipe_type": "mekanism:crystallizing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/input/chemical",
+        "/input/tag"
+      ],
+      "amount_path": "/input/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/id",
+      "amount_path": "/output/count"
+    }
+  ]
+}

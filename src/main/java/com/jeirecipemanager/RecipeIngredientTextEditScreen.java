@@ -14,7 +14,7 @@ import java.util.List;
 public class RecipeIngredientTextEditScreen extends Screen {
     private static final int PANEL_WIDTH = 280;
     private static final int ITEM_PANEL_HEIGHT = 88;
-    private static final int FLUID_PANEL_HEIGHT = 118;
+    private static final int AMOUNT_PANEL_HEIGHT = 118;
 
     private final Screen parent;
     private final String recipeId;
@@ -48,7 +48,7 @@ public class RecipeIngredientTextEditScreen extends Screen {
         this.addRenderableWidget(this.input);
 
         int buttonY = top + 58;
-        if (isFluidEdit()) {
+        if (hasAmountEdit()) {
             this.amountInput = new EditBox(this.font, left + 12, top + 58, 88, 20, amountLabel());
             this.amountInput.setMaxLength(10);
             this.amountInput.setValue(String.valueOf(Math.max(1, initialValue.amount())));
@@ -81,7 +81,7 @@ public class RecipeIngredientTextEditScreen extends Screen {
     private void updateConfirmButton() {
         if (confirmButton != null && input != null) {
             confirmButton.active = RecipeEditManager.isValidInputText(input.getValue(), initialValue.kind()) &&
-                (!isFluidEdit() || parseAmount() > 0) &&
+                (!hasAmountEdit() || parseAmount() > 0) &&
                 (!supportsPotionDetail() || RecipeEditManager.isValidDetailText(detailInput.getValue(), input.getValue(), initialValue.kind()));
         }
     }
@@ -92,22 +92,25 @@ public class RecipeIngredientTextEditScreen extends Screen {
             slots,
             slot,
             input.getValue(),
-            isFluidEdit() ? parseAmount() : 1,
-            detailInput == null ? "" : detailInput.getValue()
+            hasAmountEdit() ? parseAmount() : 1,
+            detailInput == null ? "" : detailInput.getValue(),
+            initialValue.kind(),
+            initialValue.hasAmount()
         );
         close();
     }
 
-    private boolean isFluidEdit() {
-        return initialValue.kind() == RecipeEditManager.IngredientKind.FLUID;
+    private boolean hasAmountEdit() {
+        return initialValue.hasAmount();
     }
 
     private boolean supportsPotionDetail() {
-        return isFluidEdit() && ("create:potion".equals(initialValue.ingredientId()) || initialValue.hasPotionDetail());
+        return initialValue.kind() == RecipeEditManager.IngredientKind.FLUID &&
+            ("create:potion".equals(initialValue.ingredientId()) || initialValue.hasPotionDetail());
     }
 
     private int panelHeight() {
-        return supportsPotionDetail() ? 148 : (isFluidEdit() ? FLUID_PANEL_HEIGHT : ITEM_PANEL_HEIGHT);
+        return supportsPotionDetail() ? 148 : (hasAmountEdit() ? AMOUNT_PANEL_HEIGHT : ITEM_PANEL_HEIGHT);
     }
 
     private int parseAmount() {
@@ -142,7 +145,7 @@ public class RecipeIngredientTextEditScreen extends Screen {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == 257 || keyCode == 335) {
             if (RecipeEditManager.isValidInputText(input.getValue(), initialValue.kind()) &&
-                (!isFluidEdit() || parseAmount() > 0) &&
+                (!hasAmountEdit() || parseAmount() > 0) &&
                 (!supportsPotionDetail() || RecipeEditManager.isValidDetailText(detailInput.getValue(), input.getValue(), initialValue.kind()))) {
                 confirm();
             }
@@ -163,7 +166,7 @@ public class RecipeIngredientTextEditScreen extends Screen {
         guiGraphics.fill(left, top, left + 1, top + panelHeight, 0xFF707070);
         guiGraphics.fill(left + PANEL_WIDTH - 1, top, left + PANEL_WIDTH, top + panelHeight, 0xFF707070);
         guiGraphics.drawString(this.font, this.title, left + 12, top + 10, 0xFFE0E0E0, false);
-        if (isFluidEdit()) {
+        if (hasAmountEdit()) {
             guiGraphics.drawString(this.font, amountLabel(), left + 108, top + 64, 0xFFE0E0E0, false);
             if (supportsPotionDetail()) {
                 guiGraphics.drawString(this.font, potionLabel(), left + 12, top + 112, 0xFFE0E0E0, false);

@@ -25,11 +25,14 @@ public class RecipeGhostIngredientHandler implements IGhostIngredientHandler<Rec
     public <I> List<Target<I>> getTargetsTyped(RecipesGui gui, mezz.jei.api.ingredients.ITypedIngredient<I> ingredient, boolean doStart) {
         Optional<ItemStack> itemStack = ingredient.getIngredient(mezz.jei.api.constants.VanillaTypes.ITEM_STACK);
         Optional<FluidStack> fluidStack = ingredient.getIngredient(NeoForgeTypes.FLUID_STACK);
+        Object rawIngredient = ingredient.getIngredient();
         RecipeEditManager.IngredientKind draggedKind;
         if (itemStack.isPresent() && !itemStack.get().isEmpty()) {
             draggedKind = RecipeEditManager.IngredientKind.ITEM;
         } else if (fluidStack.isPresent() && !fluidStack.get().isEmpty()) {
             draggedKind = RecipeEditManager.IngredientKind.FLUID;
+        } else if (RecipeEditManager.isChemicalStack(rawIngredient)) {
+            draggedKind = RecipeEditManager.IngredientKind.RESOURCE;
         } else {
             return List.of();
         }
@@ -108,6 +111,8 @@ public class RecipeGhostIngredientHandler implements IGhostIngredientHandler<Rec
                 RecipeEditManager.replaceSlot(recipeId, slots, slot, stack);
             } else if (ingredient instanceof FluidStack stack) {
                 RecipeEditManager.replaceSlot(recipeId, slots, slot, stack);
+            } else if (RecipeEditManager.isChemicalStack(ingredient)) {
+                RecipeEditManager.replaceResourceSlot(recipeId, slots, slot, ingredient);
             }
         }
     }

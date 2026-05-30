@@ -1,0 +1,30 @@
+{
+  "recipe_type": "mekanism:injecting",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/item_input/item",
+        "/item_input/tag"
+      ],
+      "amount_path": "/item_input/count"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "paths": [
+        "/chemical_input/chemical",
+        "/chemical_input/tag"
+      ],
+      "amount_path": "/chemical_input/amount",
+      "amount_display_scale": 200
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/id",
+      "amount_path": "/output/count"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "recipe_type": "mekanism:reaction",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "path": "/item_input",
+      "amount_path": "/item_input/count",
+      "value": "item_ingredient"
+    },
+    {
+      "role": "INPUT",
+      "index": 1,
+      "paths": [
+        "/fluid_input/fluid",
+        "/fluid_input/id",
+        "/fluid_input/tag"
+      ],
+      "amount_path": "/fluid_input/amount"
+    },
+    {
+      "role": "INPUT",
+      "index": 2,
+      "paths": [
+        "/chemical_input/chemical",
+        "/chemical_input/tag"
+      ],
+      "amount_path": "/chemical_input/amount"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "paths": [
+        {
+          "path": "/item_output/id",
+          "amount_path": "/item_output/count"
+        },
+        {
+          "path": "/chemical_output/id",
+          "amount_path": "/chemical_output/amount"
+        }
+      ],
+      "remove_alternates": false
+    },
+    {
+      "role": "OUTPUT",
+      "index": 1,
+      "path": "/chemical_output/id",
+      "amount_path": "/chemical_output/amount"
+    }
+  ]
+}

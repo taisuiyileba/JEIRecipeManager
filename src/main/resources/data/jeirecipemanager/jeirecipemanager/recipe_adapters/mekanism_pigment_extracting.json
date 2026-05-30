@@ -1,0 +1,20 @@
+{
+  "recipe_type": "mekanism:pigment_extracting",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "paths": [
+        "/input/item",
+        "/input/tag"
+      ],
+      "amount_path": "/input/count"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/id",
+      "amount_path": "/output/amount"
+    }
+  ]
+}

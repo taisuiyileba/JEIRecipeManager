@@ -1,0 +1,17 @@
+{
+  "recipe_type": "mekanism:crushing",
+  "slots": [
+    {
+      "role": "INPUT",
+      "index": 0,
+      "path": "/input/tag",
+      "amount_path": "/input/count"
+    },
+    {
+      "role": "OUTPUT",
+      "index": 0,
+      "path": "/output/id",
+      "amount_path": "/output/count"
+    }
+  ]
+}
